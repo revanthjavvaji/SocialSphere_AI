@@ -31,19 +31,21 @@ const Login: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
 
     setLoading(true);
-    const success = await login(formData.email, formData.password);
+    setLoading(true);
+    const result = await login(formData.email, formData.password);
 
-    if (success) {
+    if (result === true) {
       toast.success('Welcome back!');
       navigate('/dashboard');
     } else {
-      toast.error('Invalid email or password');
+      // result is an error message string
+      toast.error(result as string);
     }
 
     setLoading(false);
@@ -52,7 +54,7 @@ const Login: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      
+
       <main className="flex-1 pt-24 pb-12 flex items-center justify-center">
         <div className="container mx-auto px-4 max-w-md">
           <div className="text-center mb-8">

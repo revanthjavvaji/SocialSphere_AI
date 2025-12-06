@@ -1,0 +1,7 @@
+#langgraph
+#langchain
+#langchain-openai
+python-dotenv
+fastapi
+uvicorn
+sqlalchemy

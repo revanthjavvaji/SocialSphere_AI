@@ -19,7 +19,7 @@ const App = () => (
       <AuthProvider>
         <TooltipProvider>
           <Toaster />
-          <Sonner />
+          <Sonner position="top-center" richColors closeButton />
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Home />} />
