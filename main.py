@@ -28,8 +28,8 @@ def get_db():
 
 @app.post("/register", status_code=status.HTTP_201_CREATED)
 def register_user(user: schemas.UserRegister, db: Session = Depends(get_db)):
-    # Check if email already exists
-    existing_user = db.query(models.UserCredentials).filter(models.UserCredentials.email == user.Email).first()
+    # Check if email already exists (case-insensitive)
+    existing_user = db.query(models.UserCredentials).filter(models.UserCredentials.email == user.Email.lower()).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -64,7 +64,7 @@ def register_user(user: schemas.UserRegister, db: Session = Depends(get_db)):
     # Create UserCredentials record
     user_credentials = models.UserCredentials(
         bid=bid,
-        email=user.Email,
+        email=user.Email.lower(),
         password=user.Password 
     )
 
@@ -87,7 +87,7 @@ def register_user(user: schemas.UserRegister, db: Session = Depends(get_db)):
 @app.post("/login")
 def login_user(user: schemas.UserLogin, db: Session = Depends(get_db)):
     # Check if user exists
-    db_user = db.query(models.UserCredentials).filter(models.UserCredentials.email == user.Email).first()
+    db_user = db.query(models.UserCredentials).filter(models.UserCredentials.email == user.Email.lower()).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     
