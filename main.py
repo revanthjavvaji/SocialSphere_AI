@@ -2,11 +2,15 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from database import engine, SessionLocal
+from sqlalchemy import func
+from passlib.context import CryptContext
 import models
 import schemas
-import uuid
+
 
 models.Base.metadata.create_all(bind=engine)
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 app = FastAPI()
 
@@ -17,6 +21,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/health")
+def health_check():
+    return {"status": "online"}
+
 
 # Dependency
 def get_db():
@@ -33,8 +42,10 @@ def register_user(user: schemas.UserRegister, db: Session = Depends(get_db)):
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    # Generate UUID
-    bid = str(uuid.uuid4())
+    # Calculate new bid
+    max_bid = db.query(func.max(models.BusinessInfo.bid)).scalar()
+    bid = 1 if max_bid is None else max_bid + 1
+
 
     # Create BusinessInfo record
     business_info = models.BusinessInfo(
@@ -62,11 +73,13 @@ def register_user(user: schemas.UserRegister, db: Session = Depends(get_db)):
     )
 
     # Create UserCredentials record
+    hashed_password = pwd_context.hash(user.Password)
     user_credentials = models.UserCredentials(
         bid=bid,
         email=user.Email.lower(),
-        password=user.Password 
+        password=hashed_password
     )
+
 
     # Add to session and commit
     db.add(business_info)
@@ -92,8 +105,9 @@ def login_user(user: schemas.UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
     
     # Check password
-    if db_user.password != user.Password:
+    if not pwd_context.verify(user.Password, db_user.password):
         raise HTTPException(status_code=401, detail="Incorrect password")
+
     
     # Fetch related data
     business_info = db.query(models.BusinessInfo).filter(models.BusinessInfo.bid == db_user.bid).first()

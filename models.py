@@ -4,7 +4,7 @@ from database import Base
 class BusinessInfo(Base):
     __tablename__ = "business_info"
 
-    bid = Column(String, primary_key=True, index=True)
+    bid = Column(Integer, primary_key=True, index=True)
     full_name = Column(String)
     business_name = Column(String)
     industry = Column(String)
@@ -16,7 +16,7 @@ class BusinessInfo(Base):
 class Connectors(Base):
     __tablename__ = "connectors"
 
-    bid = Column(String, primary_key=True, index=True)
+    bid = Column(Integer, primary_key=True, index=True)
     insta_api_key = Column(String)
     insta_user_id = Column(String)
     facebook_api_key = Column(String)
@@ -29,6 +29,6 @@ class Connectors(Base):
 class UserCredentials(Base):
     __tablename__ = "user_credentials"
 
-    bid = Column(String, primary_key=True, index=True)
+    bid = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)
     password = Column(String)

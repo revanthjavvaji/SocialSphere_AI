@@ -2,7 +2,11 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
 
-export const Navbar: React.FC = () => {
+interface NavbarProps {
+  children?: React.ReactNode;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({ children }) => {
   const location = useLocation();
 
   return (
@@ -21,6 +25,7 @@ export const Navbar: React.FC = () => {
 
         <div className="flex items-center gap-4">
           <ThemeToggle />
+          {children}
         </div>
       </div>
     </nav>

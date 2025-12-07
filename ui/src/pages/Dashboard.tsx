@@ -30,31 +30,18 @@ const Dashboard: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Custom navbar with logout */}
-      <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-border/50">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg gradient-bg flex items-center justify-center glow">
-              <span className="text-primary-foreground font-bold text-sm">S</span>
-            </div>
-            <span className="font-display text-xl font-bold gradient-text">
-              SocialSphere AI
-            </span>
-          </div>
+      <Navbar>
+        <span className="text-sm text-muted-foreground hidden sm:block">
+          Welcome, {user?.fullName?.split(' ')[0]}
+        </span>
+        <Button variant="ghost" size="sm" onClick={handleLogout}>
+          <LogOut className="w-4 h-4 mr-2" />
+          Logout
+        </Button>
+      </Navbar>
 
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground hidden sm:block">
-              Welcome, {user?.fullName?.split(' ')[0]}
-            </span>
-            <Button variant="ghost" size="sm" onClick={handleLogout}>
-              <LogOut className="w-4 h-4 mr-2" />
-              Logout
-            </Button>
-          </div>
-        </div>
-      </nav>
-
-      <main className="flex-1 pt-16">
-        <div className="h-[calc(100vh-4rem-3.5rem)] flex flex-row">
+      <main className="flex-1 pt-20">
+        <div className="h-[calc(100vh-5rem-3.5rem)] flex flex-row">
           {/* Chat Console - Left Side */}
           <div className="w-[45%] h-full border-r border-border/50 bg-card/30">
             <ChatConsole />
