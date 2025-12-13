@@ -15,3 +15,18 @@ venv/
 .idea/
 .venv
 node_modules
+
+# Virtual Env & Testing
+test_env/
+test_env
+.venv/
+
+# Vector Stores
+faiss_store/
+**/faiss_store/
+
+# Logs
+*.log
+
+*.index
+*.pkl

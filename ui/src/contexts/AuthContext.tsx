@@ -10,7 +10,7 @@ export interface UserData {
   businessSize: string;
   logoColor: string;
   logoFile?: string;
-  businessPdf?: string;
+  businessDocuments?: File[];
   instagramApiKey?: string;
   instagramUserId?: string;
   facebookApiKey?: string;
@@ -106,6 +106,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (response.ok) {
         const data = await response.json();
         console.log("Registration successful:", data);
+
+        // Upload documents if any
+        if (userData.businessDocuments && userData.businessDocuments.length > 0) {
+          try {
+            const formData = new FormData();
+            userData.businessDocuments.forEach((file) => {
+              formData.append('files', file);
+            });
+
+            const uploadResponse = await fetch(`http://127.0.0.1:8000/upload-documents/${data.bid}`, {
+              method: 'POST',
+              body: formData,
+            });
+
+            if (!uploadResponse.ok) {
+              console.error("Document upload failed");
+              // Consider handling this error, maybe warn the user but still succeed registration
+            }
+          } catch (uploadError) {
+            console.error("Error uploading documents:", uploadError);
+          }
+        }
 
         // Keep local state update for immediate UI feedback
         setUser(userData);

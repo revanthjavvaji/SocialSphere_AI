@@ -8,12 +8,13 @@ import { Footer } from '@/components/Footer';
 import { useAuth, UserData } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { InputWithError } from '@/components/signup/InputWithError';
-import { 
-  User, 
-  Building2, 
-  Palette, 
-  Link2, 
-  Eye, 
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import {
+  User,
+  Building2,
+  Palette,
+  Link2,
+  Eye,
   EyeOff,
   ChevronDown,
   ChevronUp,
@@ -34,7 +35,7 @@ import {
 } from "@/components/ui/collapsible";
 
 const industries = [
-  'E-commerce', 'SaaS', 'Healthcare', 'Education', 'Finance', 
+  'E-commerce', 'SaaS', 'Healthcare', 'Education', 'Finance',
   'Real Estate', 'Food & Beverage', 'Fashion', 'Technology', 'Other'
 ];
 
@@ -60,7 +61,8 @@ const Signup: React.FC = () => {
     businessSize: '',
     logoColor: '#3b82f6',
     logoFile: null as File | null,
-    businessPdf: null as File | null,
+
+    businessDocuments: [] as File[],
     instagramApiKey: '',
     instagramUserId: '',
     facebookApiKey: '',
@@ -77,7 +79,7 @@ const Signup: React.FC = () => {
   const passwordsMatch = formData.password && formData.confirmPassword && formData.password === formData.confirmPassword;
   const passwordsDontMatch = formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword;
 
-  const updateField = (field: string, value: string | File | null) => {
+  const updateField = (field: string, value: string | File | File[] | null) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
@@ -117,7 +119,7 @@ const Signup: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       setConnectorsOpen(true);
       toast.error('Please fill in all required fields');
@@ -136,7 +138,8 @@ const Signup: React.FC = () => {
       businessSize: formData.businessSize,
       logoColor: formData.logoColor,
       logoFile: formData.logoFile?.name,
-      businessPdf: formData.businessPdf?.name,
+
+      businessDocuments: formData.businessDocuments,
       instagramApiKey: formData.instagramApiKey,
       instagramUserId: formData.instagramUserId,
       facebookApiKey: formData.facebookApiKey,
@@ -162,8 +165,13 @@ const Signup: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <LoadingOverlay
+        isLoading={loading}
+        message="Creating Your AI Marketing Team"
+        subMessage="Analyzing your business documents to customize your experience..."
+      />
       <Navbar />
-      
+
       <main className="flex-1 pt-24 pb-12">
         <div className="container mx-auto px-4 max-w-3xl">
           <div className="text-center mb-8">
@@ -369,20 +377,35 @@ const Signup: React.FC = () => {
                 </div>
 
                 <div className="md:col-span-2 space-y-2">
-                  <Label className="text-sm font-medium">Business Overview PDF</Label>
+                  <Label className="text-sm font-medium">Business Overview Documents (Max 10 files)</Label>
                   <div className="relative">
                     <Input
                       type="file"
-                      accept=".pdf"
-                      onChange={(e) => updateField('businessPdf', e.target.files?.[0] || null)}
+                      accept=".pdf,.csv,.xlsx,.docx,.txt"
+                      multiple
+                      onChange={(e) => {
+                        if (e.target.files) {
+                          const files = Array.from(e.target.files);
+                          if (files.length > 10) {
+                            toast.error('Maximum 10 files allowed');
+                            e.target.value = ''; // Reset input
+                            return;
+                          }
+                          updateField('businessDocuments', files);
+                        }
+                      }}
                       className="file:mr-4 file:py-1 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
                     />
                   </div>
-                  {formData.businessPdf && (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Check className="w-3 h-3 text-green-500" />
-                      {formData.businessPdf.name}
-                    </p>
+                  {formData.businessDocuments.length > 0 && (
+                    <div className="space-y-1">
+                      {formData.businessDocuments.map((file, index) => (
+                        <p key={index} className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Check className="w-3 h-3 text-green-500" />
+                          {file.name}
+                        </p>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>

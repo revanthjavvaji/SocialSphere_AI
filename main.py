@@ -10,7 +10,7 @@ import schemas
 
 models.Base.metadata.create_all(bind=engine)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 app = FastAPI()
 
@@ -135,3 +135,52 @@ def login_user(user: schemas.UserLogin, db: Session = Depends(get_db)):
     }
 
     return {"message": "Login successful", "user": response_data}
+
+from typing import List
+from fastapi import File, UploadFile
+import shutil
+import os
+from RAG.pipeline import process_documents
+from RAG.vectorstore import FaissVectorStore
+
+@app.post("/upload-documents/{bid}")
+def upload_documents(bid: int, files: List[UploadFile] = File(...), db: Session = Depends(get_db)):
+    if len(files) > 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 files allowed.")
+    
+    saved_files = []
+    temp_dir = f"temp_uploads_{bid}"
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    try:
+        for file in files:
+            file_path = os.path.join(temp_dir, file.filename)
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            saved_files.append(file_path)
+            
+        count = process_documents(bid, saved_files)
+        return {"message": "Documents processed successfully", "chunks_added": count}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+        
+    finally:
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+
+@app.post("/query/{bid}")
+def query_documents(bid: int, query: str, db: Session = Depends(get_db)):
+    try:
+        store = FaissVectorStore(bid=bid)
+        try:
+            store.load()
+        except Exception:
+            # If load fails (e.g. index not found), return empty or error
+            return {"results": [], "message": "No documents found for this Business ID."}
+            
+        results = store.query(query, top_k=5)
+        return {"results": results}
+    except Exception as e:
+         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+
