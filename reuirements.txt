@@ -1,0 +1,10 @@
+groq
+tavily-python
+mcp-tavily 
+langchain-groq 
+uv
+aiohttp
+fastmcp
+mcp-use
+loguru
+fastapi 
