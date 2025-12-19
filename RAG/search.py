@@ -15,7 +15,9 @@ except ImportError:
 
 from langchain_groq import ChatGroq
 
-load_dotenv()
+# Load .env explicitly from the project root
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(project_root, ".env"))
 
 class RAGSearch:
     def __init__(self, bid: int, persist_dir: str = None, embedding_model: str = "all-MiniLM-L6-v2", llm_model: str = "openai/gpt-oss-120b"):

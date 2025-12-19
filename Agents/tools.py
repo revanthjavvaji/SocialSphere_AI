@@ -5,9 +5,10 @@ from dotenv import load_dotenv
 from langchain.tools import tool
 from RAG.tools import search_social_sphere_context as rag_search_tool
 
-# Load .env explicitly from the Agents directory
-env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
-load_dotenv(env_path)
+# Load .env explicitly from the project root
+# current file: Agents/tools.py -> parent: Agents -> parent: Root
+root_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+load_dotenv(root_env_path)
 
 @tool
 def post_with_system_user(message: str, page_id: str = None, system_token: str = None) -> str:
