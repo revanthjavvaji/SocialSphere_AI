@@ -20,3 +20,10 @@ typesense
 langchain_openai
 langgraph
 python-multipart
+requests
+cryptography
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+langchain-groq

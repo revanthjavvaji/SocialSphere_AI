@@ -20,6 +20,9 @@ export interface UserData {
   googleConnectorEmail?: string;
   googleApiKey?: string;
   defaultFromEmail?: string;
+  Gmail_Access_Token?: string;
+  Gmail_Refresh_Token?: string;
+  Gmail_Token_Expiry?: string;
 }
 
 interface AuthContextType {
@@ -92,7 +95,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         Linkedin_access_token: userData.linkedinAccessToken || "",
         Linkedin_Author_URN: userData.linkedinAuthorUrl || "",
         Google_connecter_email: userData.googleConnectorEmail || "",
-        Google_api_key: userData.googleApiKey || ""
+        Google_api_key: userData.googleApiKey || "",
+        Gmail_Access_Token: userData.Gmail_Access_Token,
+        Gmail_Refresh_Token: userData.Gmail_Refresh_Token,
+        Gmail_Token_Expiry: userData.Gmail_Token_Expiry,
       };
 
       const response = await fetch('http://127.0.0.1:8000/register', {

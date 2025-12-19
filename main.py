@@ -69,7 +69,10 @@ def register_user(user: schemas.UserRegister, db: Session = Depends(get_db)):
         linkedin_access_token=user.Linkedin_access_token,
         linkedin_author_urn=user.Linkedin_Author_URN,
         google_connector_email=user.Google_connecter_email,
-        google_api_key=user.Google_api_key
+        google_api_key=user.Google_api_key,
+        gmail_access_token=user.Gmail_Access_Token,
+        gmail_refresh_token=user.Gmail_Refresh_Token,
+        gmail_token_expiry=user.Gmail_Token_Expiry
     )
 
     # Create UserCredentials record
@@ -132,6 +135,7 @@ def login_user(user: schemas.UserLogin, db: Session = Depends(get_db)):
         "linkedinAuthorUrl": connectors.linkedin_author_urn if connectors else "",
         "googleConnectorEmail": connectors.google_connector_email if connectors else "",
         "googleApiKey": connectors.google_api_key if connectors else "",
+        "bid": db_user.bid
     }
 
     return {"message": "Login successful", "user": response_data}
@@ -142,7 +146,8 @@ import shutil
 import os
 from RAG.pipeline import process_documents
 from RAG.vectorstore import FaissVectorStore
-
+from dotenv import load_dotenv
+load_dotenv()
 @app.post("/upload-documents/{bid}")
 def upload_documents(bid: int, files: List[UploadFile] = File(...), db: Session = Depends(get_db)):
     if len(files) > 10:
@@ -177,10 +182,114 @@ def query_documents(bid: int, query: str, db: Session = Depends(get_db)):
             store.load()
         except Exception:
             # If load fails (e.g. index not found), return empty or error
-            return {"results": [], "message": "No documents found for this Business ID."}
-            
-        results = store.query(query, top_k=5)
-        return {"results": results}
+            return {"results": results}
     except Exception as e:
          raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
 
+import requests
+from auth_utils import encrypt_token
+
+@app.get("/auth/google/callback")
+def google_auth_callback(code: str, state: str, db: Session = Depends(get_db)):
+    """
+    Exchanges authorization code for tokens and stores them encrypted.
+    state: Should contain 'bid' (e.g., "bid=123" or just "123") to associate tokens with a business.
+    """
+    try:
+        # 1. Exchange code for tokens
+        token_url = "https://oauth2.googleapis.com/token"
+        payload = {
+            "client_id": os.getenv("GOOGLE_OAUTH_CLIENT_ID"),
+            "client_secret": os.getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "http://localhost:8000/auth/google/callback") # Ensure this matches Console
+        }
+        
+        response = requests.post(token_url, data=payload)
+        response_data = response.json()
+        
+        if "error" in response_data:
+            raise HTTPException(status_code=400, detail=f"Google OAuth Error: {response_data.get('error_description')}")
+            
+        access_token = response_data.get("access_token")
+        refresh_token = response_data.get("refresh_token")
+        expires_in = response_data.get("expires_in")
+        
+        print(f"DEBUG: Auth Callback - Received Access Token: {bool(access_token)}")
+        print(f"DEBUG: Auth Callback - Received Refresh Token: {bool(refresh_token)}")
+        if not refresh_token:
+            print("DEBUG: WARNING - Google did NOT return a refresh_token. Check 'prompt=consent' parameter.")
+        
+        # 2. Extract bid from state
+        
+        if state == "signup":
+            print("DEBUG: Google Auth Callback - State is 'signup'. Skipping DB save. Returning tokens to frontend.")
+            # Encrypt tokens before sending to frontend
+            encrypted_access_token = encrypt_token(access_token)
+            encrypted_refresh_token = encrypt_token(refresh_token) if refresh_token else None
+            
+            html_content = f"""
+            <html>
+                <body>
+                    <script>
+                        window.opener.postMessage({{
+                            type: "GOOGLE_AUTH_SUCCESS",
+                            data: {{
+                                accessToken: "{encrypted_access_token}",
+                                refreshToken: "{encrypted_refresh_token}",
+                                expiry: "{expires_in}",
+                                email: "connected_via_oauth"
+                            }}
+                        }}, "*");
+                        window.close();
+                    </script>
+                    <h1>Authentication Successful</h1>
+                    <p>You can close this window now.</p>
+                </body>
+            </html>
+            """
+            from fastapi.responses import HTMLResponse
+            return HTMLResponse(content=html_content)
+
+        # Standard flow for existing users (e.g. from Dashboard)
+        try:
+            bid = int(state) 
+        except ValueError:
+             # Fallback if state is not an integer (and not "signup")
+             raise HTTPException(status_code=400, detail="Invalid state parameter")
+
+        # 3. Store tokens
+        connector = db.query(models.Connectors).filter(models.Connectors.bid == bid).first()
+        if not connector:
+             connector = models.Connectors(bid=bid)
+             db.add(connector)
+        
+        connector.gmail_access_token = encrypt_token(access_token)
+        if refresh_token:
+            connector.gmail_refresh_token = encrypt_token(refresh_token)
+        connector.gmail_token_expiry = str(expires_in)
+        
+        db.commit()
+        
+        # 4. Redirect to Frontend
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173/dashboard?google_connected=true")
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=frontend_url)
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+import gmail_utils
+
+@app.get("/gmail/daily/{bid}")
+def get_daily_emails(bid: int, db: Session = Depends(get_db)):
+    """Fetches emails from today and summarizes them for the specific business ID."""
+    try:
+        result = gmail_utils.fetch_todays_emails_and_summarize(bid, db)
+        return result
+    except Exception as e:
+         raise HTTPException(status_code=500, detail=str(e))

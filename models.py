@@ -25,6 +25,9 @@ class Connectors(Base):
     linkedin_author_urn = Column(String)
     google_connector_email = Column(String)
     google_api_key = Column(String)
+    gmail_access_token = Column(String) # Encrypted
+    gmail_refresh_token = Column(String) # Encrypted
+    gmail_token_expiry = Column(String)
 
 class UserCredentials(Base):
     __tablename__ = "user_credentials"

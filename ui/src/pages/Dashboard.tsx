@@ -7,6 +7,7 @@ import { MarketingDashboard } from '@/components/dashboard/MarketingDashboard';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { LogOut } from 'lucide-react';
+import { NotificationBell } from '@/components/dashboard/NotificationBell';
 
 const Dashboard: React.FC = () => {
   const { isAuthenticated, user, logout } = useAuth();
@@ -31,13 +32,16 @@ const Dashboard: React.FC = () => {
     <div className="min-h-screen flex flex-col">
       {/* Custom navbar with logout */}
       <Navbar>
-        <span className="text-sm text-muted-foreground hidden sm:block">
-          Welcome, {user?.fullName?.split(' ')[0]}
-        </span>
-        <Button variant="ghost" size="sm" onClick={handleLogout}>
-          <LogOut className="w-4 h-4 mr-2" />
-          Logout
-        </Button>
+        <div className="flex items-center gap-4">
+          <NotificationBell />
+          <span className="text-sm text-muted-foreground hidden sm:block">
+            Welcome, {user?.fullName?.split(' ')[0]}
+          </span>
+          <Button variant="ghost" size="sm" onClick={handleLogout}>
+            <LogOut className="w-4 h-4 mr-2" />
+            Logout
+          </Button>
+        </div>
       </Navbar>
 
       <main className="flex-1 pt-20">

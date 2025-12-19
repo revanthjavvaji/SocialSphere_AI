@@ -8,6 +8,7 @@ import { Footer } from '@/components/Footer';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Eye, EyeOff, Sparkles } from 'lucide-react';
+import { NeuralBackground } from '@/components/NeuralBackground';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -52,10 +53,11 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col relative">
+      <NeuralBackground className="fixed inset-0 pointer-events-none" opacity={1} centerX={0.75} />
       <Navbar />
 
-      <main className="flex-1 pt-24 pb-12 flex items-center justify-center">
+      <main className="flex-1 pt-24 pb-12 flex items-center justify-center relative z-10">
         <div className="container mx-auto px-4 max-w-md">
           <div className="text-center mb-8">
             <div className="w-16 h-16 rounded-2xl gradient-bg flex items-center justify-center mx-auto mb-4 glow">

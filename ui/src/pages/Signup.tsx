@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { useAuth, UserData } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { InputWithError } from '@/components/signup/InputWithError';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { NeuralBackground } from '@/components/NeuralBackground';
 import {
   User,
   Building2,
@@ -48,6 +49,44 @@ const Signup: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [connectorsOpen, setConnectorsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // State for Gmail OAuth tokens
+  const [gmailTokens, setGmailTokens] = useState<{ accessToken: string; refreshToken?: string; expiry?: string } | null>(null);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
+        const { accessToken, refreshToken, expiry } = event.data.data;
+        setGmailTokens({ accessToken, refreshToken, expiry });
+        setFormData(prev => ({ ...prev, googleConnectorEmail: 'Connected via OAuth' })); // Visual feedback
+        setGmailTokens({ accessToken, refreshToken, expiry });
+        setFormData(prev => ({ ...prev, googleConnectorEmail: 'Connected via OAuth' })); // Visual feedback
+        toast.success('Gmail connected successfully!');
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  // Consent checkbox states
+  const [consentRead, setConsentRead] = useState(false);
+  const [consentSend, setConsentSend] = useState(false);
+  const [consentControl, setConsentControl] = useState(false);
+  const [consentTransparency, setConsentTransparency] = useState(false);
+
+  // Auto-clear Gmail tokens after 5 minutes (security requirement)
+  useEffect(() => {
+    if (gmailTokens) {
+      const timer = setTimeout(() => {
+        setGmailTokens(null);
+        setFormData(prev => ({ ...prev, googleConnectorEmail: '' }));
+        toast.info('Gmail connection expired. Please connect again.', { duration: 5000 });
+      }, 5 * 60 * 1000); // 5 minutes
+
+      return () => clearTimeout(timer);
+    }
+  }, [gmailTokens]);
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -109,12 +148,40 @@ const Signup: React.FC = () => {
     if (!formData.facebookPageId.trim()) newErrors.facebookPageId = 'Required';
     if (!formData.linkedinAccessToken.trim()) newErrors.linkedinAccessToken = 'Required';
     if (!formData.linkedinAuthorUrl.trim()) newErrors.linkedinAuthorUrl = 'Required';
-    if (!formData.googleConnectorEmail.trim()) newErrors.googleConnectorEmail = 'Required';
-    if (!formData.googleApiKey.trim()) newErrors.googleApiKey = 'Required';
-    if (!formData.defaultFromEmail.trim()) newErrors.defaultFromEmail = 'Required';
+    if (!formData.facebookPageId.trim()) newErrors.facebookPageId = 'Required';
+    if (!formData.linkedinAccessToken.trim()) newErrors.linkedinAccessToken = 'Required';
+    if (!formData.linkedinAuthorUrl.trim()) newErrors.linkedinAuthorUrl = 'Required';
+    // Removed legacy Google field validations
+    // if (!formData.googleConnectorEmail.trim()) newErrors.googleConnectorEmail = 'Required';
+    // if (!formData.googleApiKey.trim()) newErrors.googleApiKey = 'Required';
+    // if (!formData.defaultFromEmail.trim()) newErrors.defaultFromEmail = 'Required';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const validateCoreFields = () => {
+    const coreErrors: Record<string, string> = {};
+    if (!formData.fullName.trim()) coreErrors.fullName = 'Full name is required';
+    if (!formData.email.trim()) coreErrors.email = 'Email is required';
+    else if (!/\S+@\S+\.\S+/.test(formData.email)) coreErrors.email = 'Invalid email format';
+    if (!formData.password) coreErrors.password = 'Password is required';
+    else if (formData.password.length < 6) coreErrors.password = 'Password must be at least 6 characters';
+    if (!formData.confirmPassword) coreErrors.confirmPassword = 'Please confirm your password';
+    else if (formData.password !== formData.confirmPassword) coreErrors.confirmPassword = 'Passwords do not match';
+    if (!formData.businessName.trim()) coreErrors.businessName = 'Business name is required';
+    if (!formData.industry) coreErrors.industry = 'Industry is required';
+    if (!formData.region.trim()) coreErrors.region = 'Region is required';
+    if (!formData.businessWebsite.trim()) coreErrors.businessWebsite = 'Business website is required';
+    if (!formData.businessSize) coreErrors.businessSize = 'Business size is required';
+
+    if (Object.keys(coreErrors).length > 0) {
+      setErrors(prev => ({ ...prev, ...coreErrors }));
+      toast.error('Please fill in all mandatory details first');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return false;
+    }
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -149,6 +216,11 @@ const Signup: React.FC = () => {
       googleConnectorEmail: formData.googleConnectorEmail,
       googleApiKey: formData.googleApiKey,
       defaultFromEmail: formData.defaultFromEmail,
+
+      // Include Gmail tokens if available
+      Gmail_Access_Token: gmailTokens?.accessToken,
+      Gmail_Refresh_Token: gmailTokens?.refreshToken,
+      Gmail_Token_Expiry: gmailTokens?.expiry,
     };
 
     const success = await signup(userData, formData.password);
@@ -163,9 +235,13 @@ const Signup: React.FC = () => {
     setLoading(false);
   };
 
+
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col relative">
+      <NeuralBackground className="fixed inset-0 pointer-events-none" opacity={1} />
+
       <LoadingOverlay
+
         isLoading={loading}
         message="Creating Your AI Marketing Team"
         subMessage="Analyzing your business documents to customize your experience..."
@@ -412,7 +488,18 @@ const Signup: React.FC = () => {
             </div>
 
             {/* Connector Inputs */}
-            <Collapsible open={connectorsOpen} onOpenChange={setConnectorsOpen}>
+            <Collapsible
+              open={connectorsOpen}
+              onOpenChange={(isOpen) => {
+                if (isOpen) {
+                  if (validateCoreFields()) {
+                    setConnectorsOpen(true);
+                  }
+                } else {
+                  setConnectorsOpen(false);
+                }
+              }}
+            >
               <div className="p-6 rounded-2xl bg-card border border-border/50 card-shadow">
                 <CollapsibleTrigger className="w-full">
                   <div className="flex items-center justify-between">
@@ -503,33 +590,174 @@ const Signup: React.FC = () => {
 
                     {/* Google */}
                     <div className="space-y-4">
-                      <h3 className="font-medium text-sm">Google / Gmail</h3>
-                      <div className="grid md:grid-cols-3 gap-4">
-                        <InputWithError
-                          id="googleConnectorEmail"
-                          label="Connector Email"
-                          placeholder="connector@gmail.com"
-                          value={formData.googleConnectorEmail}
-                          onChange={(v) => updateField('googleConnectorEmail', v)}
-                          error={errors.googleConnectorEmail}
-                        />
-                        <InputWithError
-                          id="googleApiKey"
-                          label="API Key"
-                          placeholder="Your Google API Key"
-                          value={formData.googleApiKey}
-                          onChange={(v) => updateField('googleApiKey', v)}
-                          error={errors.googleApiKey}
-                        />
-                        <InputWithError
-                          id="defaultFromEmail"
-                          label="Default From Email"
-                          placeholder="noreply@yourdomain.com"
-                          value={formData.defaultFromEmail}
-                          onChange={(v) => updateField('defaultFromEmail', v)}
-                          error={errors.defaultFromEmail}
-                        />
+                      <div className="space-y-1 mb-6">
+                        <h3 className="font-semibold text-lg text-foreground">Connect your Gmail (Optional)</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Allow SocialSphere AI to read specific emails to help you automate reminders, events, and insights.
+                        </p>
                       </div>
+
+                      <div className="bg-muted/30 p-4 rounded-xl space-y-4">
+                        <div className="space-y-2">
+                          <h4 className="font-medium text-sm text-foreground">What access does SocialSphere AI need?</h4>
+                          <p className="text-sm text-muted-foreground leading-relaxed">
+                            To help you automate reminders and send emails on your behalf, we need limited Gmail access — only with your permission.
+                          </p>
+                        </div>
+
+                        <div className="space-y-3 pt-2">
+                          <div className="flex items-start gap-3">
+                            <div className="flex-shrink-0 mt-0.5">
+                              <input
+                                type="checkbox"
+                                id="consentRead"
+                                className="w-4 h-4 rounded border-primary text-primary focus:ring-primary"
+                                checked={consentRead}
+                                onChange={(e) => setConsentRead(e.target.checked)}
+                              />
+                            </div>
+                            <label htmlFor="consentRead" className="text-sm text-muted-foreground leading-tight cursor-pointer pt-0.5">
+                              Allow SocialSphere AI to read selected Gmail emails
+                            </label>
+                          </div>
+
+                          <div className="flex items-start gap-3">
+                            <div className="flex-shrink-0 mt-0.5">
+                              <input
+                                type="checkbox"
+                                id="consentSend"
+                                className="w-4 h-4 rounded border-primary text-primary focus:ring-primary"
+                                checked={consentSend}
+                                onChange={(e) => setConsentSend(e.target.checked)}
+                              />
+                            </div>
+                            <label htmlFor="consentSend" className="text-sm text-muted-foreground leading-tight cursor-pointer pt-0.5">
+                              Allow SocialSphere AI to send emails on my behalf
+                            </label>
+                          </div>
+
+                          <div className="flex items-start gap-3">
+                            <div className="flex-shrink-0 mt-0.5">
+                              <input
+                                type="checkbox"
+                                id="consentControl"
+                                className="w-4 h-4 rounded border-primary text-primary focus:ring-primary"
+                                checked={consentControl}
+                                onChange={(e) => setConsentControl(e.target.checked)}
+                              />
+                            </div>
+                            <label htmlFor="consentControl" className="text-sm text-muted-foreground leading-tight cursor-pointer pt-0.5">
+                              I understand that I stay in control
+                            </label>
+                          </div>
+
+                          <div className="flex items-start gap-3">
+                            <div className="flex-shrink-0 mt-0.5">
+                              <input
+                                type="checkbox"
+                                id="consentTransparency"
+                                className="w-4 h-4 rounded border-primary text-primary focus:ring-primary"
+                                checked={consentTransparency}
+                                onChange={(e) => setConsentTransparency(e.target.checked)}
+                              />
+                            </div>
+                            <label htmlFor="consentTransparency" className="text-sm text-muted-foreground leading-tight cursor-pointer pt-0.5">
+                              I understand how my Gmail data is used
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={!!gmailTokens}
+                        className={gmailTokens
+                          ? "w-full flex items-center justify-center gap-2 mt-4 border-green-500 text-green-700 bg-green-50 hover:bg-green-100 transition-colors"
+                          : "w-full flex items-center justify-center gap-2 mt-4 border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"}
+                        onClick={() => {
+                          // Validate core fields AND other connector fields first
+                          const validationErrors: Record<string, string> = {};
+
+                          // Core validation
+                          if (!formData.fullName.trim()) validationErrors.fullName = 'Full name is required';
+                          if (!formData.email.trim()) validationErrors.email = 'Email is required';
+                          else if (!/\S+@\S+\.\S+/.test(formData.email)) validationErrors.email = 'Invalid email format';
+                          if (!formData.password) validationErrors.password = 'Password is required';
+                          else if (formData.password.length < 6) validationErrors.password = 'Password must be at least 6 characters';
+                          if (!formData.confirmPassword) validationErrors.confirmPassword = 'Please confirm your password';
+                          else if (formData.password !== formData.confirmPassword) validationErrors.confirmPassword = 'Passwords do not match';
+                          if (!formData.businessName.trim()) validationErrors.businessName = 'Business name is required';
+                          if (!formData.industry) validationErrors.industry = 'Industry is required';
+                          if (!formData.region.trim()) validationErrors.region = 'Region is required';
+                          if (!formData.businessWebsite.trim()) validationErrors.businessWebsite = 'Business website is required';
+                          if (!formData.businessSize) validationErrors.businessSize = 'Business size is required';
+
+                          // Consent Checkbox Validation
+                          if (!consentRead || !consentSend || !consentControl || !consentTransparency) {
+                            toast.error('Please check all the consent boxes to proceed with Gmail connection.');
+                            return;
+                          }
+
+                          // Other Connectors validation (Strict check before allowing Google Connect)
+                          if (!formData.instagramApiKey.trim()) validationErrors.instagramApiKey = 'Required';
+                          if (!formData.instagramUserId.trim()) validationErrors.instagramUserId = 'Required';
+                          if (!formData.facebookApiKey.trim()) validationErrors.facebookApiKey = 'Required';
+                          if (!formData.facebookPageId.trim()) validationErrors.facebookPageId = 'Required';
+                          if (!formData.linkedinAccessToken.trim()) validationErrors.linkedinAccessToken = 'Required';
+                          if (!formData.linkedinAuthorUrl.trim()) validationErrors.linkedinAuthorUrl = 'Required';
+
+                          if (Object.keys(validationErrors).length > 0) {
+                            setErrors(prev => ({ ...prev, ...validationErrors }));
+                            toast.error('Please fill in all mandatory details including other connectors first');
+                            // Scroll to top to show errors or find the first error
+                            const firstErrorField = Object.keys(validationErrors)[0];
+                            const element = document.getElementById(firstErrorField);
+                            if (element) {
+                              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              element.focus();
+                            } else {
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }
+                            return;
+                          }
+
+                          const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
+                          const redirectUri = import.meta.env.VITE_GOOGLE_OAUTH_REDIRECT_URI || "http://localhost:8000/auth/google/callback";
+
+                          const scope = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send";
+                          const responseType = "code";
+                          const accessType = "offline";
+                          const prompt = "consent";
+                          const state = "signup";
+
+                          const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=${responseType}&scope=${scope}&access_type=${accessType}&prompt=${prompt}&state=${state}`;
+
+                          const width = 500;
+                          const height = 600;
+                          const left = window.screen.width / 2 - width / 2;
+                          const top = window.screen.height / 2 - height / 2;
+
+                          window.open(
+                            authUrl,
+                            'Google Connect',
+                            `width=${width},height=${height},top=${top},left=${left},toolbar=no,menubar=no,scrollbars=yes`
+                          );
+                        }}
+                      >
+                        {gmailTokens ? (
+                          <>
+                            <Check className="w-5 h-5" />
+                            Gmail Connected
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z" fill="#EA4335" />
+                            </svg>
+                            Connect Gmail
+                          </>
+                        )}
+                      </Button>
                     </div>
                   </div>
                 </CollapsibleContent>
@@ -547,11 +775,11 @@ const Signup: React.FC = () => {
               </Link>
             </p>
           </form>
-        </div>
-      </main>
+        </div >
+      </main >
 
       <Footer />
-    </div>
+    </div >
   );
 };
 

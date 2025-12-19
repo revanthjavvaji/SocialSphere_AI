@@ -19,6 +19,9 @@ class UserRegister(BaseModel):
     Linkedin_Author_URN: Optional[str] = None
     Google_connecter_email: Optional[str] = None
     Google_api_key: Optional[str] = None
+    Gmail_Access_Token: Optional[str] = None
+    Gmail_Refresh_Token: Optional[str] = None
+    Gmail_Token_Expiry: Optional[str] = None
 
 class UserLogin(BaseModel):
     Email: str
