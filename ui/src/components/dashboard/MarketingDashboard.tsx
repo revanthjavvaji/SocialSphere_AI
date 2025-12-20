@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import { LoadingOverlay } from '@/components/LoadingOverlay';
+
 import {
   Camera,
   Image,
@@ -10,11 +10,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Edit,
-  Upload,
   Building2,
   Target,
-  Users,
-  Megaphone
+  Users
 } from 'lucide-react';
 import {
   Tooltip,
@@ -28,27 +26,39 @@ const months = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-// Mock content data
-const mockContent: Record<string, { posts: number; posters: number; emails: number }> = {
-  '2024-12-05': { posts: 2, posters: 1, emails: 0 },
-  '2024-12-08': { posts: 1, posters: 0, emails: 1 },
-  '2024-12-10': { posts: 3, posters: 2, emails: 1 },
-  '2024-12-15': { posts: 1, posters: 1, emails: 2 },
-  '2024-12-20': { posts: 2, posters: 0, emails: 1 },
-};
+// Initial state for calendar data
+const initialCalendarData: Record<string, Record<string, number>> = {};
 
 const quickActions = [
-  { icon: Camera, label: 'Generate Posts', color: 'from-pink-500 to-rose-500' },
-  { icon: Image, label: 'Create Poster', color: 'from-violet-500 to-purple-500' },
-  { icon: Mail, label: 'Draft Email', color: 'from-blue-500 to-cyan-500' },
-  { icon: CalendarIcon, label: 'Weekly Plan', color: 'from-emerald-500 to-teal-500' },
+  {
+    icon: Camera,
+    label: 'Generate Posts',
+    color: 'from-pink-500 to-rose-500',
+    prompt: 'Create engaging social media posts for [Topic] targeting [Audience]. Include emojis and hashtags.'
+  },
+  {
+    icon: Image,
+    label: 'Create Poster',
+    color: 'from-violet-500 to-purple-500',
+    prompt: 'Design a marketing poster for [Event/Product]. Visual style: [Modern/Classic]. Text to include: "[Headline]"'
+  },
+  {
+    icon: Mail,
+    label: 'Draft Email',
+    color: 'from-blue-500 to-cyan-500',
+    prompt: 'Draft a [Newsletter/Promo] email about [Subject]. Tone: Professional. Key details: [Points]'
+  },
+  {
+    icon: CalendarIcon,
+    label: 'Weekly Plan',
+    color: 'from-emerald-500 to-teal-500',
+    prompt: 'Generate a content calendar for next week focusing on [Theme/Goal]. Include mix of posts and stories.'
+  },
 ];
 
-export const MarketingDashboard: React.FC = () => {
+export const MarketingDashboard: React.FC<{ onQuickAction: (text: string) => void }> = ({ onQuickAction }) => {
   const { user } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -82,65 +92,32 @@ export const MarketingDashboard: React.FC = () => {
     return `${year}-${month}-${dayStr}`;
   };
 
+  const [calendarData, setCalendarData] = useState(initialCalendarData);
+
   const getContentForDay = (day: number) => {
-    return mockContent[getDateKey(day)];
+    return calendarData[getDateKey(day)];
   };
 
-  const getContentIndicator = (content: typeof mockContent[string] | undefined) => {
+  const getContentIndicator = (content: Record<string, number> | undefined) => {
     if (!content) return null;
-    const total = content.posts + content.posters + content.emails;
-    if (total === 0) return null;
-    if (content.posts > 0 && content.posters > 0 && content.emails > 0) return 'P';
-    return '●';
+    const total = Object.values(content).reduce((a, b) => a + b, 0);
+    return total > 0 ? '●' : null;
   };
 
-  const getTooltipContent = (content: typeof mockContent[string] | undefined) => {
+  const getTooltipContent = (content: Record<string, number> | undefined) => {
     if (!content) return 'No content scheduled';
     const parts = [];
-    if (content.posts > 0) parts.push(`${content.posts} post${content.posts > 1 ? 's' : ''} posted`);
-    if (content.posters > 0) parts.push(`${content.posters} poster${content.posters > 1 ? 's' : ''} created`);
-    if (content.emails > 0) parts.push(`${content.emails} email${content.emails > 1 ? 's' : ''} sent`);
+    if (content.instagram) parts.push(`${content.instagram} Insta post${content.instagram > 1 ? 's' : ''}`);
+    if (content.facebook) parts.push(`${content.facebook} Facebook post${content.facebook > 1 ? 's' : ''}`);
+    if (content.x) parts.push(`${content.x} X post${content.x > 1 ? 's' : ''}`);
+    if (content.gmail) parts.push(`${content.gmail} email${content.gmail > 1 ? 's' : ''}`);
+
     return parts.length > 0 ? parts.join(', ') : 'No content scheduled';
   };
 
-  const handleUploadClick = () => {
-    console.log("Upload button clicked");
-    fileInputRef.current?.click();
-  };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("File selected");
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
 
-    // Force set uploading true immediately
-    setIsUploading(true);
-    console.log("Set isUploading to true");
 
-    try {
-      const formData = new FormData();
-      Array.from(files).forEach((file) => {
-        formData.append('files', file);
-      });
-
-      const bid = 1;
-
-      // Simulate network request - Reduced to 1 second
-      console.log("Visual delay starting (1000ms)...");
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      console.log("Upload simulation completed");
-    } catch (error) {
-      console.error("Upload failed", error);
-    } finally {
-      setIsUploading(false);
-      console.log("Set isUploading to false");
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
-  };
 
   // Real stats state
   const [todayStats, setTodayStats] = useState({
@@ -171,20 +148,33 @@ export const MarketingDashboard: React.FC = () => {
       }
     };
 
+    const fetchCalendarStats = async () => {
+      if (!user?.bid) return;
+      try {
+        const response = await fetch(`http://localhost:8000/stats/calendar/${user.bid}`);
+        if (response.ok) {
+          const data = await response.json();
+          setCalendarData(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch calendar stats:", error);
+      }
+    };
+
     fetchStats();
+    fetchCalendarStats();
 
     // Set up polling for real-time updates (every 5 seconds)
-    const interval = setInterval(fetchStats, 5000);
+    const interval = setInterval(() => {
+      fetchStats();
+      fetchCalendarStats();
+    }, 5000);
     return () => clearInterval(interval);
   }, [user?.bid]);
 
   return (
     <>
-      <LoadingOverlay
-        isLoading={isUploading}
-        message="Analyzing Brand Assets"
-        subMessage="We're processing your documents to understand your brand voice..."
-      />
+
 
       <div className="h-full overflow-y-auto p-6 space-y-6">
         {/* Today's Overview */}
@@ -213,6 +203,7 @@ export const MarketingDashboard: React.FC = () => {
             {quickActions.map((action) => (
               <button
                 key={action.label}
+                onClick={() => onQuickAction(action.prompt)}
                 className={`p-4 rounded-xl bg-gradient-to-br ${action.color} text-primary-foreground flex items-center gap-3 hover:opacity-90 transition-opacity group`}
               >
                 <action.icon className="w-5 h-5 group-hover:scale-110 transition-transform" />
@@ -332,13 +323,7 @@ export const MarketingDashboard: React.FC = () => {
                   <div className="text-sm font-medium">Professionals 25-45</div>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <Megaphone className="w-4 h-4 text-muted-foreground mt-0.5" />
-                <div>
-                  <div className="text-xs text-muted-foreground">Current Campaign</div>
-                  <div className="text-sm font-medium">Holiday Season 2024</div>
-                </div>
-              </div>
+
             </div>
 
             <div className="flex gap-2 pt-2">
@@ -346,23 +331,6 @@ export const MarketingDashboard: React.FC = () => {
                 <Edit className="w-3 h-3 mr-2" />
                 Edit Business Info
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1"
-                onClick={handleUploadClick}
-              >
-                <Upload className="w-3 h-3 mr-2" />
-                Upload Brand Kit
-              </Button>
-              {/* Hidden File Input */}
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                multiple
-                onChange={handleFileChange}
-              />
             </div>
           </div>
         </div>

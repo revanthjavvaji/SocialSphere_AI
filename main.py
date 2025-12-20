@@ -404,6 +404,65 @@ def get_daily_stats(bid: int, db: Session = Depends(get_db)):
         logger.error(f"Failed to fetch daily stats: {e}")
         return {"posts_generated": 0, "posters_created": 0}
 
+@app.get("/stats/calendar/{bid}")
+def get_calendar_stats(bid: int, db: Session = Depends(get_db)):
+    """
+    Returns post statistics aggregated by date and platform for the calendar.
+    Format:
+    {
+        "2024-12-20": {
+            "instagram": 2,
+            "facebook": 1,
+            "x": 1,
+            "gmail": 0
+        },
+        ...
+    }
+    """
+    try:
+        # 1. Get user email
+        user = db.query(models.UserCredentials).filter(models.UserCredentials.bid == bid).first()
+        if not user:
+             logger.warning(f"Calendar Stats: No user found for BID {bid}")
+             return {}
+        
+        email = user.email
+
+        # 2. Fetch all history for this user
+        posts = db.query(models.PostHistory).filter(models.PostHistory.username == email).all()
+        
+        calendar_data = {}
+        
+        for post in posts:
+            if not post.timestamp:
+                continue
+            
+            # Extract YYYY-MM-DD
+            date_key = post.timestamp[:10]
+            
+            if date_key not in calendar_data:
+                calendar_data[date_key] = {}
+            
+            # Normalize media type
+            media = (post.media_used or "unknown").lower()
+            if "twitter" in media or "x" in media:
+                media = "x"
+            elif "insta" in media:
+                media = "instagram"
+            elif "face" in media:
+                media = "facebook"
+            elif "gmail" in media or "email" in media:
+                media = "gmail"
+            
+            # Increment count
+            calendar_data[date_key][media] = calendar_data[date_key].get(media, 0) + 1
+            
+        return calendar_data
+
+    except Exception as e:
+        logger.error(f"Failed to fetch calendar stats: {e}")
+        return {}
+
 # ---------------------------------------------------------------------
 # MCP Agent Endpoint
 # ---------------------------------------------------------------------

@@ -47,7 +47,12 @@ const suggestedPrompts = [
 
 const tones = ['Professional', 'Casual', 'Friendly', 'Technical'];
 
-export const ChatConsole: React.FC = () => {
+interface ChatConsoleProps {
+  chatInput: string;
+  setChatInput: (value: string) => void;
+}
+
+export const ChatConsole: React.FC<ChatConsoleProps> = ({ chatInput, setChatInput }) => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -57,7 +62,7 @@ export const ChatConsole: React.FC = () => {
       timestamp: new Date(),
     }
   ]);
-  const [input, setInput] = useState('');
+  // Local input state removed in favor of prop
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -70,17 +75,17 @@ export const ChatConsole: React.FC = () => {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim()) return;
+    if (!chatInput.trim()) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: input,
+      content: chatInput,
       timestamp: new Date(),
     };
 
     setMessages(prev => [...prev, userMessage]);
-    setInput('');
+    setChatInput('');
     setIsTyping(true);
 
     try {
@@ -123,7 +128,7 @@ export const ChatConsole: React.FC = () => {
   };
 
   const handlePromptClick = (prompt: string) => {
-    setInput(prompt);
+    setChatInput(prompt);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -255,8 +260,8 @@ export const ChatConsole: React.FC = () => {
           <div className="flex gap-2 items-end">
             <textarea
               placeholder="Ask me anything about marketing... (Shift+Enter for new line)"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={handleKeyDown}
               className="flex-1 min-h-[44px] max-h-[150px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none font-sans"
               style={{ height: 'auto' }}

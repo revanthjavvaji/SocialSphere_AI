@@ -12,6 +12,7 @@ import { NotificationBell } from '@/components/dashboard/NotificationBell';
 const Dashboard: React.FC = () => {
   const { isAuthenticated, user, logout } = useAuth();
   const navigate = useNavigate();
+  const [chatInput, setChatInput] = React.useState('');
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -41,12 +42,12 @@ const Dashboard: React.FC = () => {
         <div className="h-[calc(100vh-5rem-3.5rem)] flex flex-row">
           {/* Chat Console - Left Side */}
           <div className="w-[45%] h-full border-r border-border/50 bg-card/30">
-            <ChatConsole />
+            <ChatConsole chatInput={chatInput} setChatInput={setChatInput} />
           </div>
 
           {/* Marketing Dashboard - Right Side */}
           <div className="w-[55%] h-full overflow-hidden">
-            <MarketingDashboard />
+            <MarketingDashboard onQuickAction={setChatInput} />
           </div>
         </div>
       </main>
