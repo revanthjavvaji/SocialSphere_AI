@@ -15,7 +15,6 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PDFS_VECTORIZED_DIR = os.path.join(PROJECT_ROOT, "RAG", "pdfs_vectorized")
 USER_DOCS_STORE_DIR = os.path.join(PROJECT_ROOT, "faiss_store") # RAG/vectorstore.py default is "faiss_store", let's check exact logic.
 
-@tool("search_social_sphere_context", description="Search for context related to a business query. Combines insights from broad industry knowledge (PDFs) and specific business documents.")
 def search_social_sphere_context(bid: int, query: str) -> str:
     """
     Search for context related to a business query.

@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, status
+from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from database import engine, SessionLocal
@@ -6,17 +7,53 @@ from sqlalchemy import func
 from passlib.context import CryptContext
 import models
 import schemas
-
+import os
+from loguru import logger
 
 models.Base.metadata.create_all(bind=engine)
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
-app = FastAPI()
+from contextlib import asynccontextmanager
+from Agents.agent_service import agent_service
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Start Agent Service
+    await agent_service.start()
+    yield
+    # Shutdown: Stop Agent Service
+    await agent_service.stop()
+
+from starlette.middleware.sessions import SessionMiddleware
+from fastapi import Request
+
+# SECRET_KEY for signing session cookies. In production, this should be in .env
+SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "super-secret-session-key-change-me")
+
+app = FastAPI(lifespan=lifespan)
+
+from app_context import set_bid
+
+@app.middleware("http")
+async def set_bid_context_middleware(request: Request, call_next):
+    # Attempt to retrieve 'bid' from session
+    bid = request.session.get("bid")
+    if bid:
+        set_bid(bid)
+    
+    response = await call_next(request)
+    return response
+
+# Add Session Middleware
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY, https_only=False, same_site="lax")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173", "http://127.0.0.1:5173",
+        "http://localhost:8080", "http://127.0.0.1:8080"
+    ], # Specific origins for credentials support
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -25,7 +62,6 @@ app.add_middleware(
 @app.get("/health")
 def health_check():
     return {"status": "online"}
-
 
 # Dependency
 def get_db():
@@ -101,7 +137,7 @@ def register_user(user: schemas.UserRegister, db: Session = Depends(get_db)):
     return {"message": "User registered successfully", "bid": bid}
 
 @app.post("/login")
-def login_user(user: schemas.UserLogin, db: Session = Depends(get_db)):
+def login_user(user: schemas.UserLogin, request: Request, db: Session = Depends(get_db)):
     # Check if user exists
     db_user = db.query(models.UserCredentials).filter(models.UserCredentials.email == user.Email.lower()).first()
     if not db_user:
@@ -116,8 +152,8 @@ def login_user(user: schemas.UserLogin, db: Session = Depends(get_db)):
     business_info = db.query(models.BusinessInfo).filter(models.BusinessInfo.bid == db_user.bid).first()
     connectors = db.query(models.Connectors).filter(models.Connectors.bid == db_user.bid).first()
 
-    # Construct response
-    response_data = {
+    # Construct response data
+    user_data = {
         "fullName": business_info.full_name if business_info else "",
         "email": db_user.email,
         "businessName": business_info.business_name if business_info else "",
@@ -137,8 +173,31 @@ def login_user(user: schemas.UserLogin, db: Session = Depends(get_db)):
         "googleApiKey": connectors.google_api_key if connectors else "",
         "bid": db_user.bid
     }
+    
+    # START BACKEND SESSION
+    request.session["user"] = user_data
+    request.session["bid"] = db_user.bid
+    print("BID Test: ", db_user.bid)
+    set_bid(db_user.bid) # Ensure context is available immediately in this request
 
-    return {"message": "Login successful", "user": response_data}
+    return {"message": "Login successful", "user": user_data}
+
+@app.post("/logout")
+def logout_user(request: Request):
+    """Destroys the backend session."""
+    request.session.clear()
+    return {"message": "Logged out successfully"}
+
+@app.get("/me")
+def get_current_user(request: Request):
+    """
+    Checks if a valid backend session exists and returns the user data.
+    Used for persistent login state on frontend reload.
+    """
+    user = request.session.get("user")
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return {"user": user}
 
 from typing import List
 from fastapi import File, UploadFile
@@ -293,3 +352,80 @@ def get_daily_emails(bid: int, db: Session = Depends(get_db)):
         return result
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
+
+# ---------------------------------------------------------------------
+# MCP Agent Endpoint
+# ---------------------------------------------------------------------
+from pydantic import BaseModel
+from Agents.agent_service import agent_service
+
+class AgentRequest(BaseModel):
+    query: str
+
+@app.post("/agent/chat")
+async def chat_with_agent(request: AgentRequest, req: Request):
+    """
+    Endpoint to interact with the AI Agent (MCP + Groq).
+    Uses backend session to provide context (bid, tokens, etc.) to the agent.
+    """
+    if not request.query:
+        raise HTTPException(status_code=400, detail="Query is required")
+    
+    # Extract Context from Session
+    user_session = req.session.get("user", {})
+    bid = req.session.get("bid")
+    
+    logger.info(f"DEBUG: /agent/chat - Session BID: {bid}")
+    logger.info(f"DEBUG: /agent/chat - Session User: {user_session.keys()}")
+
+    context = {
+        "bid": bid,
+        "email": user_session.get("email"),
+        "facebook_page_id": user_session.get("facebookPageId"),
+        "instagram_id": user_session.get("instagramUserId"),
+        "facebook_token": user_session.get("facebookApiKey"),
+        "instagram_token": user_session.get("instagramApiKey"), # Assuming UI maps this key
+        "linkedin_token": user_session.get("linkedinAccessToken")
+    }
+
+    try:
+        # Run the agent asynchronously with context
+        agent_res = await agent_service.run_query(request.query, context=context)
+        response_text = str(agent_res)
+        
+        # Log to ChatHistory
+        try:
+            # Re-obtain session since it's a dependency usually but we can use SessionLocal here manually 
+            # or refactor to inject db. simpler to just use SessionLocal for this side-effect.
+            # However, depends(get_db) is not in this async function signature.
+            db_log = SessionLocal()
+            
+            # Basic logic to detect if "posted" (very naive, can be improved)
+            is_posted = "Successfully Published" in response_text or "Successfully posted" in response_text
+            
+            # Attempt to extract image_url if present in response_text (simple check)
+            # This is heuristic. Ideally agent returns structured data.
+            # For now, we leave image_url null unless we find a clear url in the text? 
+            # or maybe the context had it? The prompt request said "Image url(url)".
+            # If the user SENT an image, we don't handle that yet in input. 
+            # usage: `1 explainableproject@gmail.com , {image_url} . text , timestamp , Facebook` in previous request.
+            # In this request: `Image url(url)`
+            # We will leave as None for now.
+            
+            chat_record = models.ChatHistory(
+                username=user_session.get("email") or f"Unknown_bid_{bid}",
+                input_message=request.query,
+                agent_response=response_text,
+                image_url=None, 
+                timestamp=datetime.now().isoformat(),
+                posted=is_posted
+            )
+            db_log.add(chat_record)
+            db_log.commit()
+            db_log.close()
+        except Exception as log_e:
+            logger.error(f"Failed to log chat history: {log_e}")
+
+        return {"response": response_text}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Agent failed: {str(e)}")

@@ -34,13 +34,6 @@ const Dashboard: React.FC = () => {
       <Navbar>
         <div className="flex items-center gap-4">
           <NotificationBell />
-          <span className="text-sm text-muted-foreground hidden sm:block">
-            Welcome, {user?.fullName?.split(' ')[0]}
-          </span>
-          <Button variant="ghost" size="sm" onClick={handleLogout}>
-            <LogOut className="w-4 h-4 mr-2" />
-            Logout
-          </Button>
         </div>
       </Navbar>
 

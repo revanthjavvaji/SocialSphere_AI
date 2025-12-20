@@ -11,9 +11,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { 
-  Send, 
-  Bot, 
+import {
+  Send,
+  Bot,
   User,
   ChevronDown,
   Calendar,
@@ -22,6 +22,7 @@ import {
   Linkedin,
   Mail
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Message {
@@ -76,52 +77,6 @@ export const ChatConsole: React.FC = () => {
     scrollToBottom();
   }, [messages]);
 
-  const generateMockResponse = (userMessage: string): Message => {
-    const lowerMessage = userMessage.toLowerCase();
-    let content = '';
-    let drafts: Message['drafts'] = {};
-
-    if (lowerMessage.includes('content') || lowerMessage.includes('plan')) {
-      content = `Great! I've created a 7-day content plan for ${user?.businessName || 'your business'}. Here's a preview of the content I can generate:`;
-      
-      if (platforms.instagram) {
-        drafts.instagram = `📸 Day 1: "Exciting things are brewing at ${user?.businessName}! Stay tuned for something special... 🚀 #${user?.industry?.replace(/\s/g, '')} #Innovation"`;
-      }
-      if (platforms.linkedin) {
-        drafts.linkedin = `🎯 Thought Leadership Post:\n\nIn today's rapidly evolving ${user?.industry || 'industry'}, staying ahead means embracing innovation while staying true to your core values.\n\nAt ${user?.businessName}, we're committed to...`;
-      }
-      if (platforms.gmail) {
-        drafts.gmail = `Subject: Exciting News from ${user?.businessName}!\n\nDear Valued Customer,\n\nWe're thrilled to share some exciting updates about what's coming next...`;
-      }
-    } else if (lowerMessage.includes('poster') || lowerMessage.includes('offer')) {
-      content = `I'll create a stunning festival offer poster for ${user?.businessName}! Here's the concept:`;
-      drafts.instagram = `🎉 FESTIVAL SPECIAL OFFER 🎉\n\n🔥 Get up to 50% OFF on all products!\n📅 Limited time only\n\nUse code: FESTIVE50\n\n#FestivalSale #SpecialOffer #${user?.industry?.replace(/\s/g, '')}`;
-    } else if (lowerMessage.includes('email') || lowerMessage.includes('launch')) {
-      content = `Here's a compelling product launch email draft:`;
-      drafts.gmail = `Subject: Introducing Something Revolutionary from ${user?.businessName}\n\nDear [Customer Name],\n\nWe're excited to announce our latest innovation that will transform how you experience ${user?.industry || 'our products'}.\n\n✨ Key Features:\n• Feature 1\n• Feature 2\n• Feature 3\n\nBe among the first to experience this game-changer.\n\nBest regards,\n${user?.fullName}\n${user?.businessName}`;
-    } else {
-      content = `I understand you want to "${userMessage}". Let me work on that for ${user?.businessName}!`;
-      
-      if (platforms.instagram) {
-        drafts.instagram = `✨ Custom Instagram post based on your request about "${userMessage.slice(0, 30)}..."`;
-      }
-      if (platforms.linkedin) {
-        drafts.linkedin = `📊 LinkedIn content tailored to your request: "${userMessage.slice(0, 30)}..."`;
-      }
-      if (platforms.gmail) {
-        drafts.gmail = `Email draft regarding: "${userMessage.slice(0, 30)}..."`;
-      }
-    }
-
-    return {
-      id: Date.now().toString(),
-      role: 'assistant',
-      content,
-      timestamp: new Date(),
-      drafts: Object.keys(drafts).length > 0 ? drafts : undefined,
-    };
-  };
-
   const handleSend = async () => {
     if (!input.trim()) return;
 
@@ -136,12 +91,50 @@ export const ChatConsole: React.FC = () => {
     setInput('');
     setIsTyping(true);
 
-    // Simulate AI response delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      const response = await fetch('http://localhost:8000/agent/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ query: userMessage.content }),
+      });
 
-    const assistantMessage = generateMockResponse(input);
-    setMessages(prev => [...prev, assistantMessage]);
-    setIsTyping(false);
+      if (!response.ok) {
+        throw new Error('Failed to get response form Agent');
+      }
+
+      const data = await response.json();
+
+      // The backend returns { "response": "string" }
+      // We'll see if the response string contains JSON-like content for drafts
+      let content = data.response;
+      let drafts: Message['drafts'] = {};
+
+      // Simple heuristic: check if response looks like it contains draft sections
+      // This is a basic integration. For full draft parsing, the Agent prompt needs to be structured.
+      // For now, we put the whole response in content.
+
+      const assistantMessage: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: content,
+        timestamp: new Date(),
+        drafts: undefined // Parsing specific drafts from markdown/json string is complex, skipping for initial integration
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+
+    } catch (error) {
+      console.error("Agent Error:", error);
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: "❌ I encountered an error communicating with the agent server.",
+        timestamp: new Date(),
+      }]);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const handlePromptClick = (prompt: string) => {
@@ -167,9 +160,8 @@ export const ChatConsole: React.FC = () => {
             key={message.id}
             className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}
           >
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-              message.role === 'assistant' ? 'gradient-bg' : 'bg-secondary'
-            }`}>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${message.role === 'assistant' ? 'gradient-bg' : 'bg-secondary'
+              }`}>
               {message.role === 'assistant' ? (
                 <Bot className="w-4 h-4 text-primary-foreground" />
               ) : (
@@ -177,12 +169,17 @@ export const ChatConsole: React.FC = () => {
               )}
             </div>
             <div className={`max-w-[80%] ${message.role === 'user' ? 'text-right' : ''}`}>
-              <div className={`p-3 rounded-2xl ${
-                message.role === 'assistant' 
-                  ? 'bg-secondary text-secondary-foreground' 
-                  : 'gradient-bg text-primary-foreground'
-              }`}>
-                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+              <div className={`p-3 rounded-2xl ${message.role === 'assistant'
+                ? 'bg-secondary text-secondary-foreground'
+                : 'gradient-bg text-primary-foreground'
+                }`}>
+                {message.role === 'assistant' ? (
+                  <div className="text-sm prose dark:prose-invert max-w-none">
+                    <ReactMarkdown>{message.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                )}
               </div>
 
               {/* Draft Previews */}
@@ -264,24 +261,24 @@ export const ChatConsole: React.FC = () => {
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <Checkbox 
-                id="gmail" 
+              <Checkbox
+                id="gmail"
                 checked={platforms.gmail}
                 onCheckedChange={(checked) => setPlatforms(prev => ({ ...prev, gmail: !!checked }))}
               />
               <Label htmlFor="gmail" className="text-xs cursor-pointer">Gmail</Label>
             </div>
             <div className="flex items-center gap-2">
-              <Checkbox 
-                id="linkedin" 
+              <Checkbox
+                id="linkedin"
                 checked={platforms.linkedin}
                 onCheckedChange={(checked) => setPlatforms(prev => ({ ...prev, linkedin: !!checked }))}
               />
               <Label htmlFor="linkedin" className="text-xs cursor-pointer">LinkedIn</Label>
             </div>
             <div className="flex items-center gap-2">
-              <Checkbox 
-                id="instagram" 
+              <Checkbox
+                id="instagram"
                 checked={platforms.instagram}
                 onCheckedChange={(checked) => setPlatforms(prev => ({ ...prev, instagram: !!checked }))}
               />
@@ -301,8 +298,8 @@ export const ChatConsole: React.FC = () => {
           </Select>
 
           <div className="flex items-center gap-2">
-            <Switch 
-              id="draft-only" 
+            <Switch
+              id="draft-only"
               checked={draftOnly}
               onCheckedChange={setDraftOnly}
             />
