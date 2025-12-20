@@ -15,8 +15,10 @@ class UserRegister(BaseModel):
     Insta_user_id: Optional[str] = None
     Facebook_API_KEY: Optional[str] = None
     Facebook_page_id: Optional[str] = None
-    Linkedin_access_token: Optional[str] = None
-    Linkedin_Author_URN: Optional[str] = None
+    X_api_key: Optional[str] = None
+    X_api_key_secret: Optional[str] = None
+    X_access_token: Optional[str] = None
+    X_access_token_secret: Optional[str] = None
     Google_connecter_email: Optional[str] = None
     Google_api_key: Optional[str] = None
     Gmail_Access_Token: Optional[str] = None

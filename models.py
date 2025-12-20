@@ -22,8 +22,10 @@ class Connectors(Base):
     insta_user_id = Column(String)
     facebook_api_key = Column(String)
     facebook_page_id = Column(String)
-    linkedin_access_token = Column(String)
-    linkedin_author_urn = Column(String)
+    x_api_key = Column(String)
+    x_api_key_secret = Column(String)
+    x_access_token = Column(String)
+    x_access_token_secret = Column(String)
     google_connector_email = Column(String)
     google_api_key = Column(String)
     gmail_access_token = Column(String) # Encrypted

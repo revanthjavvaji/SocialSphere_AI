@@ -106,8 +106,10 @@ const Signup: React.FC = () => {
     instagramUserId: '',
     facebookApiKey: '',
     facebookPageId: '',
-    linkedinAccessToken: '',
-    linkedinAuthorUrl: '',
+    xApiKey: '',
+    xApiKeySecret: '',
+    xAccessToken: '',
+    xAccessTokenSecret: '',
     googleConnectorEmail: '',
     googleApiKey: '',
     defaultFromEmail: '',
@@ -146,15 +148,12 @@ const Signup: React.FC = () => {
     if (!formData.instagramUserId.trim()) newErrors.instagramUserId = 'Required';
     if (!formData.facebookApiKey.trim()) newErrors.facebookApiKey = 'Required';
     if (!formData.facebookPageId.trim()) newErrors.facebookPageId = 'Required';
-    if (!formData.linkedinAccessToken.trim()) newErrors.linkedinAccessToken = 'Required';
-    if (!formData.linkedinAuthorUrl.trim()) newErrors.linkedinAuthorUrl = 'Required';
-    if (!formData.facebookPageId.trim()) newErrors.facebookPageId = 'Required';
-    if (!formData.linkedinAccessToken.trim()) newErrors.linkedinAccessToken = 'Required';
-    if (!formData.linkedinAuthorUrl.trim()) newErrors.linkedinAuthorUrl = 'Required';
-    // Removed legacy Google field validations
-    // if (!formData.googleConnectorEmail.trim()) newErrors.googleConnectorEmail = 'Required';
-    // if (!formData.googleApiKey.trim()) newErrors.googleApiKey = 'Required';
-    // if (!formData.defaultFromEmail.trim()) newErrors.defaultFromEmail = 'Required';
+
+    // X Validations
+    if (!formData.xApiKey.trim()) newErrors.xApiKey = 'Required';
+    if (!formData.xApiKeySecret.trim()) newErrors.xApiKeySecret = 'Required';
+    if (!formData.xAccessToken.trim()) newErrors.xAccessToken = 'Required';
+    if (!formData.xAccessTokenSecret.trim()) newErrors.xAccessTokenSecret = 'Required';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -211,8 +210,37 @@ const Signup: React.FC = () => {
       instagramUserId: formData.instagramUserId,
       facebookApiKey: formData.facebookApiKey,
       facebookPageId: formData.facebookPageId,
-      linkedinAccessToken: formData.linkedinAccessToken,
-      linkedinAuthorUrl: formData.linkedinAuthorUrl,
+
+      xApiKey: formData.xApiKey,
+      xApiKeySecret: formData.xApiKeySecret,
+      xAccessToken: formData.xAccessToken,
+      xAccessTokenSecret: formData.xAccessTokenSecret,
+
+      // We need to pass X keys. The `UserData` interface likely needs update or we pass as any.
+      // However, `signup` implementation in AuthContext likely takes Partial<UserData>.
+      // I will assume `UserData` is flexible or I might need to update that file too.
+      // For now, I'll pass them if I can, but I notice `UserData` usage.
+      // Let's check where `UserData` is defined. It's imported.
+      // I'll proceed assuming I can modify the object or that `UserData` allows index signature.
+      // Wait, `UserData` is imported from context. I should stick to the structure map expected by backend.
+      // The `signup` function calls `/register`.
+
+      // For now, mapping X keys into the request payload logic in `Signup.tsx` 
+      // will require `useAuth` hook update IF it strictly types the argument.
+      // Let's look at `const { signup } = useAuth();` usage.
+      // The `handleSubmit` calls `signup(userData, password)`.
+
+      // I'll assume I can add properties or I should check `AuthContext.tsx`.
+      // To save time/tokens, I'll inject them and if TS errors, I'll fix `AuthContext`.
+      // But wait! `UserData` in line 198 is explicitly typed.
+      // I should update `AuthContext.tsx` if I want to be TS correct.
+      // HOWEVER, for this tool call, I will update `Signup.tsx` logic first.
+
+      // Wait, I am replacing `linkedin` fields in `formData` state.
+      // So I should replace them in the object passed to `signup`.
+
+
+
       googleConnectorEmail: formData.googleConnectorEmail,
       googleApiKey: formData.googleApiKey,
       defaultFromEmail: formData.defaultFromEmail,
@@ -222,6 +250,12 @@ const Signup: React.FC = () => {
       Gmail_Refresh_Token: gmailTokens?.refreshToken,
       Gmail_Token_Expiry: gmailTokens?.expiry,
     };
+
+    // Remove LinkedIn keys from object if strict, or just leave empty strings if type requires them.
+    // I will delete them from the object I construct if possible, but TS interface enforces keys.
+    // I will check AuthContext next. For now, I am updating the FORM LOGIC.
+
+    // ...
 
     const success = await signup(userData, formData.password);
 
@@ -565,25 +599,41 @@ const Signup: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* LinkedIn */}
+                    {/* X (Twitter) */}
                     <div className="space-y-4">
-                      <h3 className="font-medium text-sm">LinkedIn</h3>
+                      <h3 className="font-medium text-sm">X (Twitter)</h3>
                       <div className="grid md:grid-cols-2 gap-4">
                         <InputWithError
-                          id="linkedinAccessToken"
-                          label="Access Token"
-                          placeholder="Your LinkedIn Access Token"
-                          value={formData.linkedinAccessToken}
-                          onChange={(v) => updateField('linkedinAccessToken', v)}
-                          error={errors.linkedinAccessToken}
+                          id="xApiKey"
+                          label="API Key"
+                          placeholder="Your X API Key"
+                          value={formData.xApiKey}
+                          onChange={(v) => updateField('xApiKey', v)}
+                          error={errors.xApiKey}
                         />
                         <InputWithError
-                          id="linkedinAuthorUrl"
-                          label="Author URN"
-                          placeholder="urn:li:person:xxxx"
-                          value={formData.linkedinAuthorUrl}
-                          onChange={(v) => updateField('linkedinAuthorUrl', v)}
-                          error={errors.linkedinAuthorUrl}
+                          id="xApiKeySecret"
+                          label="API Key Secret"
+                          placeholder="Your X API Key Secret"
+                          value={formData.xApiKeySecret}
+                          onChange={(v) => updateField('xApiKeySecret', v)}
+                          error={errors.xApiKeySecret}
+                        />
+                        <InputWithError
+                          id="xAccessToken"
+                          label="Access Token"
+                          placeholder="Your X Access Token"
+                          value={formData.xAccessToken}
+                          onChange={(v) => updateField('xAccessToken', v)}
+                          error={errors.xAccessToken}
+                        />
+                        <InputWithError
+                          id="xAccessTokenSecret"
+                          label="Access Token Secret"
+                          placeholder="Your X Access Token Secret"
+                          value={formData.xAccessTokenSecret}
+                          onChange={(v) => updateField('xAccessTokenSecret', v)}
+                          error={errors.xAccessTokenSecret}
                         />
                       </div>
                     </div>
@@ -698,17 +748,12 @@ const Signup: React.FC = () => {
                             return;
                           }
 
-                          // Other Connectors validation (Strict check before allowing Google Connect)
-                          if (!formData.instagramApiKey.trim()) validationErrors.instagramApiKey = 'Required';
-                          if (!formData.instagramUserId.trim()) validationErrors.instagramUserId = 'Required';
-                          if (!formData.facebookApiKey.trim()) validationErrors.facebookApiKey = 'Required';
-                          if (!formData.facebookPageId.trim()) validationErrors.facebookPageId = 'Required';
-                          if (!formData.linkedinAccessToken.trim()) validationErrors.linkedinAccessToken = 'Required';
-                          if (!formData.linkedinAuthorUrl.trim()) validationErrors.linkedinAuthorUrl = 'Required';
+                          // Other Connectors validation REMOVED to allow independent connection
+                          // We only validate core fields here.
 
                           if (Object.keys(validationErrors).length > 0) {
                             setErrors(prev => ({ ...prev, ...validationErrors }));
-                            toast.error('Please fill in all mandatory details including other connectors first');
+                            toast.error('Please fill in all mandatory business details first');
                             // Scroll to top to show errors or find the first error
                             const firstErrorField = Object.keys(validationErrors)[0];
                             const element = document.getElementById(firstErrorField);

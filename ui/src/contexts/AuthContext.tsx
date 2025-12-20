@@ -15,14 +15,17 @@ export interface UserData {
   instagramUserId?: string;
   facebookApiKey?: string;
   facebookPageId?: string;
-  linkedinAccessToken?: string;
-  linkedinAuthorUrl?: string;
+  xApiKey?: string;
+  xApiKeySecret?: string;
+  xAccessToken?: string;
+  xAccessTokenSecret?: string;
   googleConnectorEmail?: string;
   googleApiKey?: string;
   defaultFromEmail?: string;
   Gmail_Access_Token?: string;
   Gmail_Refresh_Token?: string;
   Gmail_Token_Expiry?: string;
+  bid?: number;
 }
 
 interface AuthContextType {
@@ -117,8 +120,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         Insta_user_id: userData.instagramUserId || "",
         Facebook_API_KEY: userData.facebookApiKey || "",
         Facebook_page_id: userData.facebookPageId || "",
-        Linkedin_access_token: userData.linkedinAccessToken || "",
-        Linkedin_Author_URN: userData.linkedinAuthorUrl || "",
+        X_api_key: userData.xApiKey || "",
+        X_api_key_secret: userData.xApiKeySecret || "",
+        X_access_token: userData.xAccessToken || "",
+        X_access_token_secret: userData.xAccessTokenSecret || "",
         Google_connecter_email: userData.googleConnectorEmail || "",
         Google_api_key: userData.googleApiKey || "",
         Gmail_Access_Token: userData.Gmail_Access_Token,

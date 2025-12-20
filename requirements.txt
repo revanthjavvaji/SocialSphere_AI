@@ -19,6 +19,7 @@ loguru
 mcp-tavily
 mcp-use
 passlib[bcrypt]
+tweepy
 pymupdf
 pypdf
 python-dotenv

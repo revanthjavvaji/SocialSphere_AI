@@ -8,7 +8,7 @@ from app_context import get_bid
 from database import SessionLocal
 import models
 from sqlalchemy import desc
-
+import tweepy
 # Load .env explicitly from the project root
 #root_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
 load_dotenv()
@@ -190,9 +190,13 @@ class AgentService:
             
             IMPORTANT:
             1. For 'search_social_sphere_context', YOU MUST USE the 'bid' provided above. IF BID IS 'None', YOU MUST NOT CALL THIS TOOL.
-            2. For Facebook and Instagram tools, do NOT ask for or pass 'page_id', 'ig_id', or tokens. The system handles authentication automatically.
-            3. Do NOT ask the user for these IDs.
-            4. IF 'retrieve_business_context' fails or returns no info, DO NOT RETRY it. Proceed with your best general knowledge.
+            2. For **IMAGE GENERATION** (posters, ads, etc.):
+               - FIRST, call `write_image_prompt` with the user's idea to get a detailed prompt.
+               - SECOND, call `generate_marketing_poster` with that detailed prompt AND the `bid`.
+               - **CRITICAL**: Once `generate_marketing_poster` returns the URL, YOUR TASK IS COMPLETE. Return the URL to the user and STOP. DO NOT loop.
+            3. For Facebook and Instagram tools, do NOT ask for or pass 'page_id', 'ig_id', or tokens. The system handles authentication automatically.
+            4. Do NOT ask the user for these IDs.
+            5. IF 'retrieve_business_context' fails or returns no info, DO NOT RETRY it. Proceed with your best general knowledge.
             
             [PREVIOUS CHAT HISTORY SUMMARY]
             {history_summary}
@@ -214,7 +218,7 @@ class AgentService:
                 llm = ChatGroq(model="openai/gpt-oss-20b", groq_api_key=groq_api_key)
                 
                 # Create persistent agent instance reusing the heavy MCPClient connection
-                agent = MCPAgent(llm=llm, client=self.client) # max_steps default
+                agent = MCPAgent(llm=llm, client=self.client, max_steps=50)
                 self.active_agents[session_id] = agent
             
             logger.info(f"Running agent query with context: {context}")

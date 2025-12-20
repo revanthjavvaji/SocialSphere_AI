@@ -58,14 +58,6 @@ export const ChatConsole: React.FC = () => {
     }
   ]);
   const [input, setInput] = useState('');
-  const [platforms, setPlatforms] = useState({
-    gmail: true,
-    linkedin: true,
-    instagram: true,
-  });
-  const [tone, setTone] = useState('Professional');
-  const [draftOnly, setDraftOnly] = useState(false);
-  const [scheduleDate, setScheduleDate] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -105,21 +97,14 @@ export const ChatConsole: React.FC = () => {
 
       const data = await response.json();
 
-      // The backend returns { "response": "string" }
-      // We'll see if the response string contains JSON-like content for drafts
       let content = data.response;
-      let drafts: Message['drafts'] = {};
-
-      // Simple heuristic: check if response looks like it contains draft sections
-      // This is a basic integration. For full draft parsing, the Agent prompt needs to be structured.
-      // For now, we put the whole response in content.
 
       const assistantMessage: Message = {
         id: Date.now().toString(),
         role: 'assistant',
         content: content,
         timestamp: new Date(),
-        drafts: undefined // Parsing specific drafts from markdown/json string is complex, skipping for initial integration
+        drafts: undefined
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -141,191 +126,145 @@ export const ChatConsole: React.FC = () => {
     setInput(prompt);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="p-4 border-b border-border/50">
-        <h2 className="font-display font-semibold text-lg flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg gradient-bg flex items-center justify-center">
-            <Bot className="w-4 h-4 text-primary-foreground" />
-          </div>
-          Chat with Your Marketing Agent
-        </h2>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}
-          >
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${message.role === 'assistant' ? 'gradient-bg' : 'bg-secondary'
-              }`}>
-              {message.role === 'assistant' ? (
-                <Bot className="w-4 h-4 text-primary-foreground" />
-              ) : (
-                <User className="w-4 h-4 text-secondary-foreground" />
-              )}
-            </div>
-            <div className={`max-w-[80%] ${message.role === 'user' ? 'text-right' : ''}`}>
-              <div className={`p-3 rounded-2xl ${message.role === 'assistant'
-                ? 'bg-secondary text-secondary-foreground'
-                : 'gradient-bg text-primary-foreground'
-                }`}>
-                {message.role === 'assistant' ? (
-                  <div className="text-sm prose dark:prose-invert max-w-none">
-                    <ReactMarkdown>{message.content}</ReactMarkdown>
-                  </div>
-                ) : (
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                )}
-              </div>
-
-              {/* Draft Previews */}
-              {message.drafts && (
-                <div className="mt-3 space-y-2">
-                  {message.drafts.instagram && (
-                    <div className="p-3 rounded-xl bg-card border border-border/50 text-left">
-                      <div className="flex items-center gap-2 mb-2 text-pink-500">
-                        <Instagram className="w-4 h-4" />
-                        <span className="text-xs font-medium">Instagram Draft</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground whitespace-pre-wrap">{message.drafts.instagram}</p>
-                    </div>
-                  )}
-                  {message.drafts.linkedin && (
-                    <div className="p-3 rounded-xl bg-card border border-border/50 text-left">
-                      <div className="flex items-center gap-2 mb-2 text-blue-600">
-                        <Linkedin className="w-4 h-4" />
-                        <span className="text-xs font-medium">LinkedIn Draft</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground whitespace-pre-wrap">{message.drafts.linkedin}</p>
-                    </div>
-                  )}
-                  {message.drafts.gmail && (
-                    <div className="p-3 rounded-xl bg-card border border-border/50 text-left">
-                      <div className="flex items-center gap-2 mb-2 text-red-500">
-                        <Mail className="w-4 h-4" />
-                        <span className="text-xs font-medium">Email Draft</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground whitespace-pre-wrap">{message.drafts.gmail}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <p className="text-xs text-muted-foreground mt-1">
-                {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
-            </div>
-          </div>
-        ))}
-
-        {isTyping && (
-          <div className="flex gap-3">
+    <div className="flex h-full">
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col min-w-0 border-r border-border/50">
+        {/* Header */}
+        <div className="p-4 border-b border-border/50">
+          <h2 className="font-display font-semibold text-lg flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg gradient-bg flex items-center justify-center">
               <Bot className="w-4 h-4 text-primary-foreground" />
             </div>
-            <div className="p-3 rounded-2xl bg-secondary">
-              <div className="flex gap-1">
-                <span className="w-2 h-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-2 h-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-2 h-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '300ms' }} />
+            Chat with Your Marketing Agent
+          </h2>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}
+            >
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${message.role === 'assistant' ? 'gradient-bg' : 'bg-secondary'
+                }`}>
+                {message.role === 'assistant' ? (
+                  <Bot className="w-4 h-4 text-primary-foreground" />
+                ) : (
+                  <User className="w-4 h-4 text-secondary-foreground" />
+                )}
+              </div>
+              <div className={`max-w-[80%] min-w-0 ${message.role === 'user' ? 'text-right' : ''}`}>
+                <div className={`p-3 rounded-2xl break-words overflow-hidden ${message.role === 'assistant'
+                  ? 'bg-secondary text-secondary-foreground'
+                  : 'gradient-bg text-primary-foreground'
+                  }`}>
+                  {message.role === 'assistant' ? (
+                    <div className="text-sm prose dark:prose-invert max-w-none break-words">
+                      <ReactMarkdown>{message.content}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                  )}
+                </div>
+
+                {/* Draft Previews */}
+                {message.drafts && (
+                  <div className="mt-3 space-y-2">
+                    {message.drafts.instagram && (
+                      <div className="p-3 rounded-xl bg-card border border-border/50 text-left">
+                        <div className="flex items-center gap-2 mb-2 text-pink-500">
+                          <Instagram className="w-4 h-4" />
+                          <span className="text-xs font-medium">Instagram Draft</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{message.drafts.instagram}</p>
+                      </div>
+                    )}
+                    {message.drafts.linkedin && (
+                      <div className="p-3 rounded-xl bg-card border border-border/50 text-left">
+                        <div className="flex items-center gap-2 mb-2 text-blue-600">
+                          <Linkedin className="w-4 h-4" />
+                          <span className="text-xs font-medium">LinkedIn Draft</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{message.drafts.linkedin}</p>
+                      </div>
+                    )}
+                    {message.drafts.gmail && (
+                      <div className="p-3 rounded-xl bg-card border border-border/50 text-left">
+                        <div className="flex items-center gap-2 mb-2 text-red-500">
+                          <Mail className="w-4 h-4" />
+                          <span className="text-xs font-medium">Email Draft</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{message.drafts.gmail}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <p className="text-xs text-muted-foreground mt-1">
+                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
               </div>
             </div>
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Suggested Prompts */}
-      <div className="px-4 py-2 border-t border-border/50">
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-          {suggestedPrompts.map((prompt) => (
-            <button
-              key={prompt}
-              onClick={() => handlePromptClick(prompt)}
-              className="shrink-0 px-3 py-1.5 text-xs rounded-full bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors"
-            >
-              {prompt}
-            </button>
           ))}
+
+          {isTyping && (
+            <div className="flex gap-3">
+              <div className="w-8 h-8 rounded-lg gradient-bg flex items-center justify-center">
+                <Bot className="w-4 h-4 text-primary-foreground" />
+              </div>
+              <div className="p-3 rounded-2xl bg-secondary">
+                <div className="flex gap-1">
+                  <span className="w-2 h-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-2 h-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-2 h-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
         </div>
-      </div>
 
-      {/* Controls */}
-      <div className="p-4 border-t border-border/50 space-y-4">
-        {/* Platform & Tone Selection */}
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="gmail"
-                checked={platforms.gmail}
-                onCheckedChange={(checked) => setPlatforms(prev => ({ ...prev, gmail: !!checked }))}
-              />
-              <Label htmlFor="gmail" className="text-xs cursor-pointer">Gmail</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="linkedin"
-                checked={platforms.linkedin}
-                onCheckedChange={(checked) => setPlatforms(prev => ({ ...prev, linkedin: !!checked }))}
-              />
-              <Label htmlFor="linkedin" className="text-xs cursor-pointer">LinkedIn</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="instagram"
-                checked={platforms.instagram}
-                onCheckedChange={(checked) => setPlatforms(prev => ({ ...prev, instagram: !!checked }))}
-              />
-              <Label htmlFor="instagram" className="text-xs cursor-pointer">Instagram</Label>
-            </div>
+        {/* Suggested Prompts */}
+        <div className="px-4 py-2 border-t border-border/50">
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+            {suggestedPrompts.map((prompt) => (
+              <button
+                key={prompt}
+                onClick={() => handlePromptClick(prompt)}
+                className="shrink-0 px-3 py-1.5 text-xs rounded-full bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors"
+              >
+                {prompt}
+              </button>
+            ))}
           </div>
+        </div>
 
-          <Select value={tone} onValueChange={setTone}>
-            <SelectTrigger className="w-32 h-8 text-xs">
-              <SelectValue placeholder="Tone" />
-            </SelectTrigger>
-            <SelectContent>
-              {tones.map(t => (
-                <SelectItem key={t} value={t}>{t}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <div className="flex items-center gap-2">
-            <Switch
-              id="draft-only"
-              checked={draftOnly}
-              onCheckedChange={setDraftOnly}
+        {/* Controls */}
+        <div className="p-4 border-t border-border/50 space-y-4">
+          {/* Input Area */}
+          <div className="flex gap-2 items-end">
+            <textarea
+              placeholder="Ask me anything about marketing... (Shift+Enter for new line)"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="flex-1 min-h-[44px] max-h-[150px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none font-sans"
+              style={{ height: 'auto' }}
             />
-            <Label htmlFor="draft-only" className="text-xs cursor-pointer">Draft Only</Label>
+            <Button onClick={handleSend} variant="gradient" size="icon" className="h-[44px] w-[44px]">
+              <Send className="w-4 h-4" />
+            </Button>
           </div>
-
-          <Input
-            type="datetime-local"
-            value={scheduleDate}
-            onChange={(e) => setScheduleDate(e.target.value)}
-            className="w-auto h-8 text-xs"
-          />
-        </div>
-
-        {/* Input Area */}
-        <div className="flex gap-2">
-          <Input
-            placeholder="Ask me anything about marketing..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-            className="flex-1"
-          />
-          <Button onClick={handleSend} variant="gradient" size="icon">
-            <Send className="w-4 h-4" />
-          </Button>
         </div>
       </div>
     </div>

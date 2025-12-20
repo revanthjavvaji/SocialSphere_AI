@@ -142,12 +142,41 @@ export const MarketingDashboard: React.FC = () => {
     }
   };
 
-  // Mock stats
-  const todayStats = {
-    posts: 3,
-    posters: 1,
-    emails: 2,
-  };
+  // Real stats state
+  const [todayStats, setTodayStats] = useState({
+    posts: 0,
+    posters: 0,
+    emails: 0,
+  });
+
+  // Fetch daily stats
+  React.useEffect(() => {
+    const fetchStats = async () => {
+      if (!user?.bid) return;
+
+      try {
+        const response = await fetch(`http://localhost:8000/stats/daily/${user.bid}`);
+        if (response.ok) {
+          const data = await response.json();
+          // Backend returns: posts_generated, posters_created
+          // We map them to our UI state. Emails are not yet tracked in backend stats endpoint, default to 0.
+          setTodayStats({
+            posts: data.posts_generated || 0,
+            posters: data.posters_created || 0,
+            emails: 0 // Placeholder until email tracking is added
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch dashboard stats:", error);
+      }
+    };
+
+    fetchStats();
+
+    // Set up polling for real-time updates (every 5 seconds)
+    const interval = setInterval(fetchStats, 5000);
+    return () => clearInterval(interval);
+  }, [user?.bid]);
 
   return (
     <>

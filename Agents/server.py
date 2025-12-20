@@ -1,5 +1,6 @@
 from typing import Any
 import hashlib
+import urllib.parse
 from loguru import logger
 import aiohttp
 from groq import Groq
@@ -10,6 +11,7 @@ import requests
 import time
 import os
 from dotenv import load_dotenv
+import tweepy
 
 # RAG Tools Import (Fixing potential naming conflicts)
 # Ensure RAG/tools.py is accessible. RAG is a sibling package.
@@ -23,7 +25,8 @@ except ImportError:
     from RAG.tools import search_social_sphere_context as rag_search_tool
 
 from database import SessionLocal
-from models import PostHistory, UserCredentials
+from database import SessionLocal
+from models import PostHistory, UserCredentials, ChatHistory
 from datetime import datetime
 
 # Load .env explicitly from the project root
@@ -55,6 +58,284 @@ else:
 # ---------------------------------------------------------------------
 # Ported Tools from tools.py (Social Posting & RAG)
 # ---------------------------------------------------------------------
+
+@mcp.tool()
+async def post_to_x(bid: int, text: str | None = None, image_path: str | None = None) -> str:
+    """
+    Post text, image, or text+image to X (formerly Twitter).
+    
+    Use this tool `post_to_x` when the user wants to tweet or post to X.
+    
+    **Parameters:**
+    - `bid` (required): Business ID of the user.
+    - `text` (optional): The content of the tweet. Must be <= 280 characters.
+    - `image_path` (optional): Absolute path to an image file to upload.
+    
+    **Requirements:**
+    - At least one of `text` or `image_path` must be provided.
+    - Image format must be JPG, PEG, PNG, or WEBP.
+    
+    **Credentials:**
+    - Uses `X_API_KEY`, `X_API_KEY_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` from environment variables.
+    """
+    if not text and not image_path:
+        return "❌ Error: At least one of 'text' or 'image_path' must be provided."
+
+    # 1. Validate inputs
+    if text:
+        if len(text) > 280:
+            return "❌ Error: Text exceeds X character limit (280)."
+
+    if image_path:
+        path = Path(image_path)
+        if not path.exists():
+            return f"❌ Error: Image file not found: {image_path}"
+        if path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp"}:
+            return "❌ Error: Unsupported image format. Use .jpg, .jpeg, .png, or .webp."
+        
+        # Verify image integrity
+        try:
+            with Image.open(path) as img:
+                img.verify()
+        except Exception:
+            return "❌ Error: Invalid or corrupted image file."
+
+    # 2. Authenticate (Blocking I/O moved to thread)
+    def _authenticate_and_post():
+        try:
+            # Check creds
+            required_vars = ["X_API_KEY", "X_API_KEY_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_TOKEN_SECRET"]
+            missing = [v for v in required_vars if not os.getenv(v)]
+            if missing:
+                return f"❌ Error: Missing required environment variables: {', '.join(missing)}"
+
+            client = tweepy.Client(
+                consumer_key=os.getenv("X_API_KEY"),
+                consumer_secret=os.getenv("X_API_KEY_SECRET"),
+                access_token=os.getenv("X_ACCESS_TOKEN"),
+                access_token_secret=os.getenv("X_ACCESS_TOKEN_SECRET"),
+            )
+
+            # Upload media if needed (requires OAuth1 API)
+            media_ids = None
+            if image_path:
+                auth = tweepy.OAuth1UserHandler(
+                    os.getenv("X_API_KEY"),
+                    os.getenv("X_API_KEY_SECRET"),
+                    os.getenv("X_ACCESS_TOKEN"),
+                    os.getenv("X_ACCESS_TOKEN_SECRET"),
+                )
+                api = tweepy.API(auth)
+                media = api.media_upload(filename=image_path)
+                media_ids = [media.media_id]
+
+            # Create Tweet
+            response = client.create_tweet(
+                text=text if text else None,
+                media_ids=media_ids,
+            )
+            
+            return {
+                "id": response.data["id"],
+                "url": f"https://x.com/user/status/{response.data['id']}"
+            }
+        except Exception as e:
+            logger.error(f"X Post Error: {e}")
+            raise e
+
+    try:
+        # Run blocking tweepy code in thread
+        result = await asyncio.to_thread(_authenticate_and_post)
+        
+        if isinstance(result, str) and result.startswith("❌"):
+             return result
+
+        success_msg = f"🚀 Successfully posted to X! Tweet ID: {result['id']} ({result['url']})"
+        logger.info(success_msg)
+
+        # 3. Log to PostHistory
+        try:
+            db = SessionLocal()
+            user = db.query(UserCredentials).filter(UserCredentials.bid == bid).first()
+            email = user.email if user else f"Unknown_bid_{bid}"
+            
+            new_post = PostHistory(
+                username=email,
+                text=text or "[Image Only]",
+                image_url=image_path, # using path as url for now since it's local upload
+                timestamp=datetime.now().isoformat(),
+                media_used="Twitter/X"
+            )
+            db.add(new_post)
+            db.commit()
+            db.close()
+        except Exception as db_e:
+            logger.error(f"Failed to log post to database: {db_e}")
+
+        return success_msg
+
+    except Exception as e:
+        return f"❌ Error posting to X: {e}"
+
+
+@mcp.tool()
+async def write_image_prompt(query: str, business_name: str | None = None) -> str:
+    """
+    Generates a high-quality image generation prompt for Flux.1 using Groq.
+    
+    Args:
+        query: The user's description or idea for the image.
+        business_name: Optional business name to include in context.
+        
+    Returns:
+        A detailed, optimized prompt string for image generation.
+    """
+    logger.info(f"Generating image prompt for: {query}")
+    
+    context = ""
+    if business_name:
+        context = f"Business Name: {business_name}\n"
+
+    prompt = f"""
+    You are an expert Social Media Marketing Designer & AI Prompt Engineer.
+    Your task is to convert the user's business request into a HIGH-CONVERSION, COMMERCIAL ADVERTISEMENT PROMPT for Flux.1.
+    
+    User Request: "{query}"
+    {context}
+    
+    Guidelines:
+    - **Aesthetic**: Commercial, high-end advertising, professional product photography, social media optimized (Instagram/Facebook style).
+    - **Focus**: Make the business/product the clear 'Hero'. Ensure the image looks like a ready-to-post paid ad.
+    - **Lighting/Mood**: Bright, inviting, high-contrast, 'studio lighting' or 'golden hour'.
+    - **Keywords**: "award-winning product photography", "commercial advertisement", "4k", "high detail", "cinematic composition", "vibrant colors".
+    - **Style**: Avoid generic 'AI art' styles. Go for 'Photorealism' or 'Premium 3D Render' unless asked otherwise.
+    - Keep it under 75 words.
+    - Output ONLY the raw prompt string. No "Here is the prompt:" prefix.
+    """
+    
+    response = await call_groq_async(prompt)
+    return response.choices[0].message.content.strip()
+
+@mcp.tool()
+async def generate_marketing_poster(prompt: str, bid: int) -> str:
+    """
+    Generates a high-quality marketing poster image using Pollinations AI (Flux model).
+
+    Args:
+        prompt: The full, detailed image generation prompt (use `write_image_prompt` first!).
+        bid: Business ID (required for logging).
+    
+    Returns:
+        The URL of the generated image.
+    """
+    logger.info(f"Generating poster with prompt: {prompt[:50]}...")
+
+    # 1. URL Encode the prompt
+    encoded_prompt = urllib.parse.quote(prompt)
+    
+    # 2. Construct the Pollinations URL
+    # Using 'flux' model for best quality
+    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&model=flux&nologo=true"
+    
+    # 3. Synchronously fetch the image (block until generated/cached)
+    # 3. Synchronously fetch the image (block until generated/cached)
+    # Refactored to use requests in a thread with RETRIES to handle 502 errors
+    try:
+        logger.info("Fetching image to ensure generation...")
+        
+        def fetch_sync(url):
+            # Try 3 times
+            for attempt in range(3):
+                try:
+                    logger.info(f"Image fetch attempt {attempt + 1}/3...")
+                    resp = requests.get(url, timeout=60)
+                    if resp.status_code == 200:
+                        return resp
+                    # If 502 or other server error, wait and retry
+                    logger.warning(f"Attempt {attempt + 1} failed with status {resp.status_code}. Retrying...")
+                    time.sleep(2)
+                except requests.RequestException as e:
+                    logger.warning(f"Attempt {attempt + 1} failed with error: {e}")
+                    time.sleep(2)
+            return None # Failed after all attempts
+            
+        resp = await asyncio.to_thread(fetch_sync, image_url)
+        
+        if resp and resp.status_code == 200:
+            logger.info("Image successfully generated and fetched.")
+            
+            # 4. Save Image Locally (User Request: "create folder images/{bid} and store image")
+            try:
+                # Determine paths
+                # Current: Agents/server.py. Root: ../
+                base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                images_dir = os.path.join(base_dir, "images", str(bid))
+                os.makedirs(images_dir, exist_ok=True)
+                
+                # Create filename
+                filename = f"poster_{int(time.time())}.jpg"
+                local_path = os.path.join(images_dir, filename)
+                
+                # Write file
+                with open(local_path, "wb") as f:
+                    f.write(resp.content)
+                logger.info(f"Saved image locally to: {local_path}")
+                
+                # For DB logging, we prefer a relative path or the full path as requested.
+                # Usually relative for web apps (e.g. /images/1/foo.jpg), but user said "image path". 
+                # We'll stick to the one we just wrote.
+                db_image_path = local_path
+                
+            except Exception as e:
+                logger.error(f"Failed to save image locally: {e}")
+                # Fallback to remote URL for logging if local save fails
+                db_image_path = image_url
+
+        else:
+            status = resp.status_code if resp else "Connection Error"
+            logger.warning(f"Image generation failed after retries with status: {status}")
+            return f"⚠️ Image generation failed with status {status}. Please try again."
+                    
+        # 5. Log to ChatHistory (User Request: "end logic where and how to stop... add in chat_history")
+        # This mimics the "final action" behavior of posting tools.
+        try:
+            from models import ChatHistory, UserCredentials
+            db = SessionLocal()
+            
+            # Resolve email from BID
+            user = db.query(UserCredentials).filter(UserCredentials.bid == bid).first()
+            email = user.email if user else f"Unknown_bid_{bid}"
+            
+            # Log the successful generation as a completed interaction
+            # Note: valid ChatHistory usually needs input_message. We'll use the prompt.
+            new_chat_log = ChatHistory(
+                username=email,
+                input_message=f"Generate poster: {prompt[:50]}...",
+                agent_response=f"Poster generated successfully. Local: {db_image_path}",
+                timestamp=datetime.now().isoformat(),
+                chat_id=f"gen_{int(time.time())}", 
+            )
+            
+            if hasattr(new_chat_log, 'image_url'):
+                new_chat_log.image_url = db_image_path # Storing local path as requested
+            
+            db.add(new_chat_log)
+            db.commit()
+            db.close()
+            logger.info(f"✅ Logged generated poster to ChatHistory for {email}")
+            
+        except Exception as db_e:
+            logger.error(f"Failed to log to ChatHistory: {db_e}")
+            # Don't fail the tool just because logging failed, but warn.
+
+    except Exception as e:
+        logger.error(f"Failed to fetch/log image: {e}")
+        return f"⚠️ Failed to generate image: {e}"
+    
+    # Return the REMOTE URL for display in chat (since local path might not serve to UI immediately without config)
+    # The user asked to "display image for user", which works best with the remote URL this session.
+    # The DB has the local path for persistence.
+    return f"Poster generated successfully!\n\n![Generated Marketing Poster]({image_url})"
 
 @mcp.tool()
 async def post_to_facebook(message: str, bid: int) -> str:

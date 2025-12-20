@@ -6,6 +6,7 @@ from database import engine, SessionLocal
 from sqlalchemy import func
 from passlib.context import CryptContext
 import models
+from models import PostHistory, ChatHistory
 import schemas
 import os
 from loguru import logger
@@ -73,9 +74,11 @@ def get_db():
 
 @app.post("/register", status_code=status.HTTP_201_CREATED)
 def register_user(user: schemas.UserRegister, db: Session = Depends(get_db)):
+    print(f"Registration Attempt: {user.dict()}")
     # Check if email already exists (case-insensitive)
     existing_user = db.query(models.UserCredentials).filter(models.UserCredentials.email == user.Email.lower()).first()
     if existing_user:
+        print("Registration Failed: Email exists")
         raise HTTPException(status_code=400, detail="Email already registered")
 
     # Calculate new bid
@@ -102,8 +105,10 @@ def register_user(user: schemas.UserRegister, db: Session = Depends(get_db)):
         insta_user_id=user.Insta_user_id,
         facebook_api_key=user.Facebook_API_KEY,
         facebook_page_id=user.Facebook_page_id,
-        linkedin_access_token=user.Linkedin_access_token,
-        linkedin_author_urn=user.Linkedin_Author_URN,
+        x_api_key=user.X_api_key,
+        x_api_key_secret=user.X_api_key_secret,
+        x_access_token=user.X_access_token,
+        x_access_token_secret=user.X_access_token_secret,
         google_connector_email=user.Google_connecter_email,
         google_api_key=user.Google_api_key,
         gmail_access_token=user.Gmail_Access_Token,
@@ -132,6 +137,7 @@ def register_user(user: schemas.UserRegister, db: Session = Depends(get_db)):
         db.refresh(user_credentials)
     except Exception as e:
         db.rollback()
+        print(f"Database Commit Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     return {"message": "User registered successfully", "bid": bid}
@@ -167,8 +173,10 @@ def login_user(user: schemas.UserLogin, request: Request, db: Session = Depends(
         "instagramUserId": connectors.insta_user_id if connectors else "",
         "facebookApiKey": connectors.facebook_api_key if connectors else "",
         "facebookPageId": connectors.facebook_page_id if connectors else "",
-        "linkedinAccessToken": connectors.linkedin_access_token if connectors else "",
-        "linkedinAuthorUrl": connectors.linkedin_author_urn if connectors else "",
+        "xApiKey": connectors.x_api_key if connectors else "",
+        "xApiKeySecret": connectors.x_api_key_secret if connectors else "",
+        "xAccessToken": connectors.x_access_token if connectors else "",
+        "xAccessTokenSecret": connectors.x_access_token_secret if connectors else "",
         "googleConnectorEmail": connectors.google_connector_email if connectors else "",
         "googleApiKey": connectors.google_api_key if connectors else "",
         "bid": db_user.bid
@@ -352,6 +360,49 @@ def get_daily_emails(bid: int, db: Session = Depends(get_db)):
         return result
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/stats/daily/{bid}")
+def get_daily_stats(bid: int, db: Session = Depends(get_db)):
+    """
+    Fetches daily statistics for the agent console:
+    - Posts Generated: Count of entries in PostHistory for today.
+    - Posters Created: Count of entries in ChatHistory (with images) for today.
+    """
+    try:
+        # 1. Get user email for this bid to filter history
+        user = db.query(models.UserCredentials).filter(models.UserCredentials.bid == bid).first()
+        if not user:
+            # Fallback if no user found (shouldn't happen for valid bid views)
+            return {"posts_generated": 0, "posters_created": 0}
+        
+        email = user.email
+        today_prefix = datetime.now().isoformat()[:10] # YYYY-MM-DD
+        
+        # 2. Count Posts Generated (PostHistory)
+        # Filter by username (email) and timestamp starting with today's date
+        posts_count = db.query(PostHistory).filter(
+            PostHistory.username == email,
+            PostHistory.timestamp.startswith(today_prefix)
+        ).count()
+        
+        # 3. Count Posters Created (ChatHistory)
+        # Filter by username, timestamp, and ensure image_url is present (indicating a poster was made)
+        # We assume 'posted=False' or True doesn't matter, just that it was created/logged.
+        # But specifically looking for entries where an image was generated (image_url is not None).
+        posters_count = db.query(ChatHistory).filter(
+            ChatHistory.username == email,
+            ChatHistory.timestamp.startswith(today_prefix),
+            ChatHistory.image_url != None
+        ).count()
+        
+        return {
+            "posts_generated": posts_count,
+            "posters_created": posters_count
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to fetch daily stats: {e}")
+        return {"posts_generated": 0, "posters_created": 0}
 
 # ---------------------------------------------------------------------
 # MCP Agent Endpoint
