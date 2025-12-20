@@ -13,6 +13,8 @@ import time
 import os
 from dotenv import load_dotenv
 import tweepy
+from PIL import Image
+from pathlib import Path
 
 # RAG Tools Import (Fixing potential naming conflicts)
 # Ensure RAG/tools.py is accessible. RAG is a sibling package.

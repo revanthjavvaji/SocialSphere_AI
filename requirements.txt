@@ -32,3 +32,4 @@ typesense
 uv
 uvicorn
 itsdangerous
+Pillow
